@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Academic Citation Copilot",
+  "version": "0.1.0",
+  "description": "Find academic evidence and deterministic citations for selected Google Docs text.",
+  "permissions": ["activeTab"],
+  "host_permissions": ["https://docs.google.com/*"],
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://docs.google.com/document/*"],
+      "js": ["assets/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
