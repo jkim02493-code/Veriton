@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vite build --watch",
-    "build": "tsc --noEmit && vite build && node scripts/copyManifest.mjs"
+    "build": "tsc --noEmit && node scripts/buildExtension.mjs && node scripts/copyManifest.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "4.3.4",
