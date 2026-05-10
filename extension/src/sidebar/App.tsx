@@ -67,6 +67,8 @@ export function App({ onInsertCitation }: Props) {
   const [citationStyle, setCitationStyle] = useState<CitationStyle>("APA");
   const [recencyPreference, setRecencyPreference] = useState<RecencyPreference>("balanced");
   const [scannedDocument, setScannedDocument] = useState<ScannedDocument | null>(null);
+  const [customKeywordInput, setCustomKeywordInput] = useState("");
+  const [customKeywords, setCustomKeywords] = useState<string[]>([]);
   const [cards, setCards] = useState<EvidenceCardType[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [searchFocus, setSearchFocus] = useState<string | null>(null);
@@ -90,6 +92,38 @@ export function App({ onInsertCitation }: Props) {
   function addDebugMessage(message: string) {
     const timestamp = new Date().toLocaleTimeString();
     setDebugMessages((current) => [`${timestamp} ${message}`, ...current].slice(0, 8));
+  }
+
+  function normalizeSearchQuery(query: string): string {
+    return query.trim().replace(/\s+/g, " ");
+  }
+
+  function mergeSearchQueries(autoQueries: string[], extraQueries = customKeywords): string[] {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    for (const query of [...autoQueries, ...extraQueries]) {
+      const normalized = normalizeSearchQuery(query);
+      const key = normalized.toLowerCase();
+      if (!normalized || seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      merged.push(normalized);
+    }
+    return merged;
+  }
+
+  function addCustomKeyword() {
+    const nextKeyword = normalizeSearchQuery(customKeywordInput);
+    if (!nextKeyword) {
+      return;
+    }
+    setCustomKeywords((current) => mergeSearchQueries(current, [nextKeyword]));
+    setCustomKeywordInput("");
+  }
+
+  function removeCustomKeyword(keyword: string) {
+    setCustomKeywords((current) => current.filter((item) => item !== keyword));
   }
 
   async function searchPhrases(keyPhrases: string[], sourceLabel: string, preference = recencyPreference, demoMode = false) {
@@ -165,9 +199,10 @@ export function App({ onInsertCitation }: Props) {
     try {
       const scanResult = await scanActiveDocument();
       setScannedDocument(scanResult);
-      addDebugMessage(`Document scanned: ${scanResult.wordCount} words, ${scanResult.keyPhrases.length} search queries`);
+      const searchQueries = mergeSearchQueries(scanResult.keyPhrases);
+      addDebugMessage(`Document scanned: ${scanResult.wordCount} words, ${searchQueries.length} search queries`);
       setIsLoading(false);
-      await searchPhrases(scanResult.keyPhrases, "document scan");
+      await searchPhrases(searchQueries, "document scan");
     } catch (scanError) {
       setError(`Document scan failed: ${scanError instanceof Error ? scanError.message : String(scanError)}`);
       setApiRequestStatus("Document scan failed");
@@ -179,7 +214,7 @@ export function App({ onInsertCitation }: Props) {
   }
 
   async function showDemoSources() {
-    const fallbackPhrases = scannedDocument?.keyPhrases.length ? scannedDocument.keyPhrases : [];
+    const fallbackPhrases = scannedDocument?.keyPhrases.length ? mergeSearchQueries(scannedDocument.keyPhrases) : customKeywords;
     if (fallbackPhrases.length === 0) {
       return;
     }
@@ -259,14 +294,14 @@ export function App({ onInsertCitation }: Props) {
         wordCount: text.split(/\s+/).filter(Boolean).length,
       };
       setScannedDocument(fallbackScan);
-      void searchPhrases([text], "context-menu selection");
+      void searchPhrases(mergeSearchQueries([text]), "context-menu selection");
     };
     window.addEventListener("acc-context-menu-selection", listener);
     return () => window.removeEventListener("acc-context-menu-selection", listener);
   }, [citationStyle, recencyPreference]);
 
   const scanSummary = scannedDocument
-    ? `Document scanned: ${scannedDocument.wordCount} words, ${scannedDocument.keyPhrases.length} search queries generated`
+    ? `Document scanned: ${scannedDocument.wordCount} words, ${mergeSearchQueries(scannedDocument.keyPhrases).length} search queries ready`
     : "Click Find Evidence to automatically scan your document and retrieve academic sources.";
 
   return (
@@ -287,7 +322,7 @@ export function App({ onInsertCitation }: Props) {
                   const nextPreference = event.target.value as RecencyPreference;
                   setRecencyPreference(nextPreference);
                   if (scannedDocument?.keyPhrases.length) {
-                    void searchPhrases(scannedDocument.keyPhrases, "recency filter", nextPreference);
+                    void searchPhrases(mergeSearchQueries(scannedDocument.keyPhrases), "recency filter", nextPreference);
                   }
                 }}>
                   <option value="balanced">Balanced</option>
@@ -301,16 +336,37 @@ export function App({ onInsertCitation }: Props) {
               </div>
             </div>
             <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm leading-5 text-slate-700">{scanSummary}</p>
-            {scannedDocument?.keyPhrases.length ? (
+            {(scannedDocument?.keyPhrases.length || customKeywords.length) ? (
               <div className="mt-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Search queries</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {scannedDocument.keyPhrases.map((phrase) => (
+                  {scannedDocument?.keyPhrases.map((phrase) => (
                     <span key={phrase} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">{phrase}</span>
+                  ))}
+                  {customKeywords.map((keyword) => (
+                    <span key={keyword} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                      {keyword}
+                      <button className="text-slate-400 hover:text-slate-900" type="button" onClick={() => removeCustomKeyword(keyword)} aria-label={`Remove ${keyword}`}>x</button>
+                    </span>
                   ))}
                 </div>
               </div>
             ) : null}
+            <div className="mt-3 flex gap-2">
+              <input
+                className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
+                placeholder="Add a keyword..."
+                value={customKeywordInput}
+                onChange={(event) => setCustomKeywordInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addCustomKeyword();
+                  }
+                }}
+              />
+              <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400" type="button" onClick={addCustomKeyword} disabled={!customKeywordInput.trim()}>Add</button>
+            </div>
             <button className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400" onClick={handleFindEvidence} disabled={isLoading}>Find Evidence</button>
           </section>
           {error ? <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div> : null}
@@ -338,7 +394,7 @@ export function App({ onInsertCitation }: Props) {
                 <div className="mt-3 space-y-1 rounded-xl bg-slate-50 p-3">
                   <p><span className="font-semibold">Document ID:</span> {scannedDocument?.documentId ?? "none"}</p>
                   <p><span className="font-semibold">Word count:</span> {scannedDocument?.wordCount ?? 0}</p>
-                  <p><span className="font-semibold">Search queries:</span> {scannedDocument?.keyPhrases.join(", ") || "none"}</p>
+                  <p><span className="font-semibold">Search queries:</span> {mergeSearchQueries(scannedDocument?.keyPhrases ?? []).join(", ") || "none"}</p>
                   <p><span className="font-semibold">Current request method:</span> {currentRequestExtractionMethod}</p>
                   <p><span className="font-semibold">Backend health result:</span> {backendHealthResult}</p>
                   <p><span className="font-semibold">API request status:</span> {apiRequestStatus}</p>
