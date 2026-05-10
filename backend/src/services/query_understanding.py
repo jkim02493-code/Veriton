@@ -176,10 +176,6 @@ def understand_query(text: str) -> QueryFocus:
     )
 
 
-def is_ambiguous_focus(focus: QueryFocus) -> bool:
-    return not focus.protected_concept and len(focus.keywords) < 2
-
-
 def relevance_score(focus: QueryFocus, title: str, snippet: str, source_type: str, year: str | None, recency_preference: str = "balanced") -> float:
     haystack = normalize_text(f"{title} {snippet}")
     title_text = normalize_text(title)

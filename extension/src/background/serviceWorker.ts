@@ -1,5 +1,5 @@
 import type { EvidenceResponse, HealthResponse } from "../../../shared/types";
-import type { BackendEvidenceMessage, BackendHealthMessage } from "../types/messages";
+import type { BackendEvidenceMessage, BackendHealthMessage, ExtractTopicsMessage, FetchDocumentTextMessage, ScanDocumentRequestedMessage } from "../types/messages";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -22,8 +22,41 @@ class BackendFetchError extends Error {
   }
 }
 
+interface GoogleDocsTextRun {
+  content?: string;
+}
+
+interface GoogleDocsParagraphElement {
+  textRun?: GoogleDocsTextRun;
+}
+
+interface GoogleDocsStructuralElement {
+  paragraph?: {
+    elements?: GoogleDocsParagraphElement[];
+  };
+}
+
+interface GoogleDocsResponse {
+  body?: {
+    content?: GoogleDocsStructuralElement[];
+  };
+}
+
 chrome.runtime.onInstalled.addListener(() => {
-  console.info("Academic Citation Copilot installed.");
+  chrome.contextMenus.create({
+    id: "veriton-find-evidence",
+    title: "Find Evidence with Veriton",
+    contexts: ["selection"]
+  });
+});
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "veriton-find-evidence" && info.selectionText && tab?.id) {
+    chrome.tabs.sendMessage(tab.id, {
+      type: "CONTEXT_MENU_SELECTION",
+      text: info.selectionText
+    });
+  }
 });
 
 function devLog(message: string, value?: unknown): void {
@@ -59,7 +92,47 @@ async function fetchWithTimeout<T>(path: string, options: RequestInit = {}): Pro
   }
 }
 
-chrome.runtime.onMessage.addListener((message: BackendHealthMessage | BackendEvidenceMessage, _sender, sendResponse) => {
+function normalizeWhitespace(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function getAuthToken(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive: true }, (token) => {
+      const runtimeError = chrome.runtime.lastError;
+      if (runtimeError || !token) {
+        reject(new Error(runtimeError?.message ?? "Google OAuth token is unavailable."));
+        return;
+      }
+      resolve(token);
+    });
+  });
+}
+
+async function fetchDocumentText(documentId: string): Promise<string> {
+  const token = await getAuthToken();
+  const response = await fetch(`https://docs.googleapis.com/v1/documents/${encodeURIComponent(documentId)}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const payload = (await response.json().catch(() => ({}))) as GoogleDocsResponse | { error?: { message?: string } };
+  if (!response.ok) {
+    const errorMessage = "error" in payload ? payload.error?.message : undefined;
+    throw new Error(errorMessage ?? `Google Docs API request failed with status ${response.status}.`);
+  }
+
+  const documentResponse = payload as GoogleDocsResponse;
+  const paragraphTexts = documentResponse.body?.content?.flatMap((item) => {
+    const elements = item.paragraph?.elements ?? [];
+    return elements.map((element) => element.textRun?.content ?? "").filter(Boolean);
+  }) ?? [];
+
+  return normalizeWhitespace(paragraphTexts.join(" "));
+}
+
+chrome.runtime.onMessage.addListener((message: BackendHealthMessage | BackendEvidenceMessage | ScanDocumentRequestedMessage | FetchDocumentTextMessage | ExtractTopicsMessage, sender, sendResponse) => {
   if (message.type === "BACKEND_HEALTH") {
     devLog("request received", message.type);
     fetchWithTimeout<HealthResponse>("/health")
@@ -94,6 +167,51 @@ chrome.runtime.onMessage.addListener((message: BackendHealthMessage | BackendEvi
         requestBody,
         responseBody: error instanceof BackendFetchError ? error.responseBody : undefined,
       }));
+    return true;
+  }
+
+  if (message.type === "FETCH_DOCUMENT_TEXT") {
+    fetchDocumentText(message.documentId)
+      .then((text) => sendResponse({ text }))
+      .catch((error: unknown) => sendResponse({ error: error instanceof Error ? error.message : String(error) }));
+    return true;
+  }
+
+  if (message.type === "EXTRACT_TOPICS") {
+    const requestBody = JSON.stringify({ text: message.text });
+    fetchWithTimeout<{ topics: string[] }>("/extract-topics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: requestBody,
+    })
+      .then((result) => sendResponse({ topics: result.payload.topics }))
+      .catch((error: unknown) => sendResponse({ error: error instanceof Error ? error.message : String(error) }));
+    return true;
+  }
+
+  if (message.type === "SCAN_DOCUMENT_REQUESTED") {
+    const forwardToTab = (tabId: number) => {
+      chrome.tabs.sendMessage(tabId, message, (response) => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ ok: false, error: chrome.runtime.lastError.message ?? "Could not scan the active Google Docs tab." });
+          return;
+        }
+        sendResponse(response);
+      });
+    };
+
+    if (sender.tab?.id !== undefined) {
+      forwardToTab(sender.tab.id);
+      return true;
+    }
+
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (tab?.id === undefined) {
+        sendResponse({ ok: false, error: "No active tab is available for document scanning." });
+        return;
+      }
+      forwardToTab(tab.id);
+    });
     return true;
   }
 

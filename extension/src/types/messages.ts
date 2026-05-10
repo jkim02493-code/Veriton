@@ -1,44 +1,14 @@
-import type { CitationStyle } from "../../../shared/types";
 import type { EvidenceRequest } from "../../../shared/types";
-
-export interface SelectionSnapshot {
-  text: string;
-  normalizedText: string;
-  method: string;
-  emptyReason: string;
-  capturedAt: number | null;
-  documentUrl: string;
-  source: "google-docs" | "none";
-  fingerprint: string;
-  extractionAttempts: string[];
-}
+import type { ScannedDocument } from "../content/documentScanner";
 
 export interface InsertCitationMessage {
   type: "INSERT_CITATION";
   citation: string;
 }
 
-export interface SelectionChangedMessage {
-  type: "SELECTION_CHANGED";
-  snapshot: SelectionSnapshot;
-}
-
-export interface SelectionRequestedMessage {
-  type: "SELECTION_REQUESTED";
-  requestId: string;
-  allowCopyFallback?: boolean;
-  previousRequestText?: string;
-}
-
-export interface SelectionResponseMessage {
-  type: "SELECTION_RESPONSE";
-  requestId: string;
-  snapshot: SelectionSnapshot;
-}
-
-export interface FindEvidenceRequestState {
-  selectedText: string;
-  citationStyle: CitationStyle;
+export interface ContextMenuSelectionMessage {
+  type: "CONTEXT_MENU_SELECTION";
+  text: string;
 }
 
 export interface BackendHealthMessage {
@@ -48,4 +18,34 @@ export interface BackendHealthMessage {
 export interface BackendEvidenceMessage {
   type: "BACKEND_EVIDENCE";
   request: EvidenceRequest;
+}
+
+export interface ScanDocumentRequestedMessage {
+  type: "SCAN_DOCUMENT_REQUESTED";
+}
+
+export interface ScanDocumentRuntimeResponse {
+  ok: boolean;
+  payload?: ScannedDocument;
+  error?: string;
+}
+
+export interface FetchDocumentTextMessage {
+  type: "FETCH_DOCUMENT_TEXT";
+  documentId: string;
+}
+
+export interface FetchDocumentTextRuntimeResponse {
+  text?: string;
+  error?: string;
+}
+
+export interface ExtractTopicsMessage {
+  type: "EXTRACT_TOPICS";
+  text: string;
+}
+
+export interface ExtractTopicsRuntimeResponse {
+  topics?: string[];
+  error?: string;
 }

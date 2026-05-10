@@ -6,19 +6,6 @@ type ClipboardFallbackResult = {
   detail: string;
 };
 
-function nodeIsInGoogleDocsEditor(node: Node | null): boolean {
-  const element = node instanceof Element ? node : node?.parentElement;
-  return Boolean(element?.closest(".kix-appview-editor"));
-}
-
-function activeSelectionIsInGoogleDocsEditor(): boolean {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-    return false;
-  }
-  return nodeIsInGoogleDocsEditor(selection.anchorNode) && nodeIsInGoogleDocsEditor(selection.focusNode);
-}
-
 export async function clipboardCopyFallback(): Promise<ClipboardFallbackResult> {
   const attempts: string[] = [];
   let capturedText = "";
@@ -32,16 +19,6 @@ export async function clipboardCopyFallback(): Promise<ClipboardFallbackResult> 
   } catch (error) {
     attempts.push(`clipboard save failed: ${error instanceof Error ? error.message : String(error)}`);
   }
-
-  if (!activeSelectionIsInGoogleDocsEditor()) {
-    attempts.push("selection check failed: active selection is not inside .kix-appview-editor");
-    return {
-      text: "",
-      method: "clipboard copy-event fallback",
-      detail: attempts.join("; "),
-    };
-  }
-  attempts.push("selection check: inside Google Docs editor");
 
   const copyListener = (evt: ClipboardEvent) => {
     capturedText = cleanSelectedText(evt.clipboardData?.getData("text/plain") ?? "");
@@ -58,8 +35,8 @@ export async function clipboardCopyFallback(): Promise<ClipboardFallbackResult> 
     document.removeEventListener("copy", copyListener);
   }
 
+  await new Promise((resolve) => window.setTimeout(resolve, 60));
   if (!capturedText) {
-    await new Promise((resolve) => window.setTimeout(resolve, 60));
     try {
       capturedText = cleanSelectedText(await navigator.clipboard.readText());
       attempts.push(capturedText ? `clipboard read after copy: success (${capturedText.length} chars)` : "clipboard read after copy: empty");

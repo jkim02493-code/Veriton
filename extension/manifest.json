@@ -3,12 +3,18 @@
   "name": "Academic Citation Copilot",
   "version": "0.1.0",
   "description": "Find academic evidence and deterministic citations for selected Google Docs text.",
-  "permissions": ["activeTab", "clipboardRead", "clipboardWrite"],
+  "permissions": ["activeTab", "clipboardRead", "clipboardWrite", "contextMenus", "identity", "storage"],
   "host_permissions": [
     "https://docs.google.com/*",
+    "https://docs.googleapis.com/*",
+    "https://www.googleapis.com/*",
     "http://127.0.0.1:8000/*",
     "http://localhost:8000/*"
   ],
+  "oauth2": {
+    "client_id": "791076560067-j2nllerjfn5imf0qv04fq591lab558t2.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/documents.readonly"]
+  },
   "background": {
     "service_worker": "assets/background.js",
     "type": "module"

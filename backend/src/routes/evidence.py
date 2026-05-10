@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from src.config.settings import Settings, get_settings
 from src.schemas.evidence import EvidenceRequest, EvidenceResponse, HealthResponse
 from src.services.evidence_service import retrieve_evidence
@@ -27,9 +27,7 @@ def evidence(request: EvidenceRequest, settings: Settings = Depends(get_settings
         ) from exc
 
     warnings = []
-    if result.ambiguous:
-        warnings.append("Your selection is ambiguous. What is the main claim you want to support?")
-    elif result.live_unavailable:
+    if result.live_unavailable:
         warnings.append("Live academic search is temporarily unavailable.")
     elif not result.cards:
         warnings.append("No strong sources found for this selection.")
@@ -46,3 +44,51 @@ def evidence(request: EvidenceRequest, settings: Settings = Depends(get_settings
         retry=result.live_unavailable,
         demoMode=result.demo_mode,
     )
+
+
+@router.post("/extract-topics")
+async def extract_topics(request: dict):
+    text = request.get("text", "")
+    if not text:
+        return {"topics": []}
+
+    import re
+    from collections import Counter
+
+    stop_words = {
+        "the","a","an","and","or","but","in","on","at","to","for",
+        "of","with","this","that","these","those","it","its","is",
+        "are","was","were","be","been","being","have","has","had",
+        "do","does","did","will","would","could","should","may",
+        "might","can","not","from","by","as","into","through",
+        "also","such","more","most","other","some","than","then",
+        "there","their","they","when","where","which","while",
+        "who","how","all","any","each","been","about","after",
+        "before","between","both","during","only","own","same",
+        "so","very","just","over","often","even","however",
+        "although","because","since","whether","within","without"
+    }
+
+    text_lower = text.lower()
+    words = re.findall(r"\b[a-z]{4,}\b", text_lower)
+    filtered = [word for word in words if word not in stop_words]
+
+    bigrams = []
+    for index in range(len(filtered) - 1):
+        bigrams.append(f"{filtered[index]} {filtered[index + 1]}")
+
+    trigrams = []
+    for index in range(len(filtered) - 2):
+        trigrams.append(f"{filtered[index]} {filtered[index + 1]} {filtered[index + 2]}")
+
+    bigram_counts = Counter(bigrams).most_common(10)
+    trigram_counts = Counter(trigrams).most_common(10)
+
+    topics = []
+    for phrase, count in trigram_counts[:2]:
+        topics.append(phrase)
+    for phrase, count in bigram_counts[:3]:
+        if len(topics) < 4:
+            topics.append(phrase)
+
+    return {"topics": topics[:4]}

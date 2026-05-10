@@ -6,7 +6,7 @@ from src.retrieval.live_provider import LiveAcademicRetrievalProvider
 from src.retrieval.mock_provider import MockRetrievalProvider
 from src.schemas.evidence import EvidenceCard
 from src.services.normalizer import normalize_provider_cards
-from src.services.query_understanding import QueryFocus, is_ambiguous_focus, understand_query
+from src.services.query_understanding import QueryFocus, understand_query
 
 
 @dataclass
@@ -14,7 +14,6 @@ class EvidenceRetrievalResult:
     cards: list[EvidenceCard]
     search_focus: str
     live_unavailable: bool = False
-    ambiguous: bool = False
     demo_mode: bool = False
 
 
@@ -24,8 +23,6 @@ def get_retrieval_provider(settings: Settings) -> RetrievalProvider:
 
 def retrieve_evidence(query: str, settings: Settings, recency_preference: str = "balanced", demo_mode: bool = False) -> EvidenceRetrievalResult:
     focus = understand_query(query)
-    if is_ambiguous_focus(focus):
-        return EvidenceRetrievalResult(cards=[], search_focus=focus.display_topic, ambiguous=True)
     if demo_mode:
         demo_cards = normalize_provider_cards(MockRetrievalProvider().retrieve(focus.search_query)[:3])
         return EvidenceRetrievalResult(cards=demo_cards, search_focus=focus.display_topic, demo_mode=True)
