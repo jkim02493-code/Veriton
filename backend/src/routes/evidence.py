@@ -51,11 +51,12 @@ async def extract_topics(request: dict):
     text = request.get("text", "")
     if not text:
         return {"topics": []}
+    language = request.get("language", "en")
 
     import re
     from collections import Counter
 
-    stop_words = {
+    english_stop_words = {
         "the","a","an","and","or","but","in","on","at","to","for",
         "of","with","this","that","these","those","it","its","is",
         "are","was","were","be","been","being","have","has","had",
@@ -68,9 +69,64 @@ async def extract_topics(request: dict):
         "so","very","just","over","often","even","however",
         "although","because","since","whether","within","without"
     }
+    japanese_stop_words = {
+        "する","ある","いる","なる","れる","られる","として","について",
+        "における","によって","このような","それぞれ","および","また",
+        "さらに","しかし","ただし","つまり","例えば","特に"
+    }
+    spanish_stop_words = {
+        "que", "con", "una", "por", "del", "los", "las", "como",
+        "pero", "más", "esto", "este", "esta", "son", "sus",
+        "puede", "han", "hay", "ser", "fue", "era", "para"
+    }
+    chinese_stop_words = {
+        "的","了","在","是","我","他","她","它","们","这","那","和","有",
+        "与","或","但","从","到","被","把","对","向","因为","所以"
+    }
+
+    stop_words = set(english_stop_words)
+    if language == "ja":
+        stop_words.update(japanese_stop_words)
+    elif language == "es":
+        stop_words.update(spanish_stop_words)
+    elif language == "zh":
+        stop_words.update(chinese_stop_words)
 
     text_lower = text.lower()
-    words = re.findall(r"\b[a-z]{4,}\b", text_lower)
+    for stop_word in stop_words:
+        if language in {"ja", "zh"}:
+            text_lower = text_lower.replace(stop_word, " ")
+
+    if language in {"ja", "zh"}:
+        known_terms = {
+            "ja": [
+                "経済", "市場", "投資", "金融", "株式", "操作", "心理", "規制",
+                "技術", "社会", "政策", "環境", "教育", "研究", "分析", "影響",
+                "発展", "行動", "情報", "システム",
+            ],
+            "zh": [
+                "市场", "投资", "经济", "金融", "股票", "操纵", "心理", "监管",
+                "技术", "社会", "政策", "环境", "教育", "研究", "分析", "影响",
+                "发展", "行为", "信息", "系统",
+            ],
+        }[language]
+        matches = []
+        for term in known_terms:
+            for match in re.finditer(re.escape(term), text_lower):
+                matches.append((match.start(), term))
+        words = [term for _position, term in sorted(matches)]
+        if not words:
+            cjk_chunks = re.findall(r"[\u3040-\u30ff\u4e00-\u9faf]{2,}", text_lower)
+            words = []
+            for chunk in cjk_chunks:
+                if chunk in stop_words:
+                    continue
+                if len(chunk) <= 6:
+                    words.append(chunk)
+                    continue
+                words.extend(chunk[index:index + 2] for index in range(len(chunk) - 1))
+    else:
+        words = re.findall(r"\b[a-záéíóúñü]{4,}\b", text_lower)
     filtered = [word for word in words if word not in stop_words]
 
     bigrams = []

@@ -7,10 +7,13 @@ import { useToasts } from "../hooks/useToasts";
 import { API_BASE_URL, BackendRequestError, findEvidence, getHealth } from "../services/api";
 import type { ScanDocumentRuntimeResponse } from "../types/messages";
 import type { ScannedDocument } from "../content/documentScanner";
+import { translateQueriesToEnglish } from "../utils/queryTranslator";
 
 interface Props {
   onInsertCitation: (citation: string) => Promise<boolean>;
 }
+
+type LanguageSelection = "auto" | "en" | "ja" | "es" | "zh";
 
 function cardIdentity(card: EvidenceCardType): string {
   return (card.doi || card.url || card.title || card.id).trim().toLowerCase();
@@ -67,6 +70,7 @@ export function App({ onInsertCitation }: Props) {
   const [citationStyle, setCitationStyle] = useState<CitationStyle>("APA");
   const [recencyPreference, setRecencyPreference] = useState<RecencyPreference>("balanced");
   const [scannedDocument, setScannedDocument] = useState<ScannedDocument | null>(null);
+  const [manualLanguage, setManualLanguage] = useState<LanguageSelection>("auto");
   const [customKeywordInput, setCustomKeywordInput] = useState("");
   const [customKeywords, setCustomKeywords] = useState<string[]>([]);
   const [cards, setCards] = useState<EvidenceCardType[]>([]);
@@ -111,6 +115,47 @@ export function App({ onInsertCitation }: Props) {
       merged.push(normalized);
     }
     return merged;
+  }
+
+  function effectiveLanguageFor(document = scannedDocument): string {
+    return manualLanguage === "auto" ? document?.detectedLanguage ?? "en" : manualLanguage;
+  }
+
+  function originalQueriesFor(document = scannedDocument): string[] {
+    if (!document) {
+      return [];
+    }
+    return document.originalKeyPhrases?.length ? document.originalKeyPhrases : document.keyPhrases;
+  }
+
+  function translatedQueriesFor(document = scannedDocument): string[] {
+    return translateQueriesToEnglish(originalQueriesFor(document), effectiveLanguageFor(document));
+  }
+
+  function queryPairsFor(document = scannedDocument): Array<{ original: string; translated: string }> {
+    const originals = originalQueriesFor(document);
+    const translated = translateQueriesToEnglish(originals, effectiveLanguageFor(document));
+    return originals.map((original, index) => ({
+      original,
+      translated: translated[index] ?? original,
+    }));
+  }
+
+  function allSearchQueriesFor(document = scannedDocument): string[] {
+    return mergeSearchQueries(translatedQueriesFor(document));
+  }
+
+  function languageBadge(language: string | undefined): string {
+    if (language === "ja") {
+      return "🇯🇵 Japanese detected";
+    }
+    if (language === "es") {
+      return "🇪🇸 Spanish detected";
+    }
+    if (language === "zh") {
+      return "🇨🇳 Chinese detected";
+    }
+    return "";
   }
 
   function addCustomKeyword() {
@@ -199,7 +244,7 @@ export function App({ onInsertCitation }: Props) {
     try {
       const scanResult = await scanActiveDocument();
       setScannedDocument(scanResult);
-      const searchQueries = mergeSearchQueries(scanResult.keyPhrases);
+      const searchQueries = allSearchQueriesFor(scanResult);
       addDebugMessage(`Document scanned: ${scanResult.wordCount} words, ${searchQueries.length} search queries`);
       setIsLoading(false);
       await searchPhrases(searchQueries, "document scan");
@@ -214,7 +259,7 @@ export function App({ onInsertCitation }: Props) {
   }
 
   async function showDemoSources() {
-    const fallbackPhrases = scannedDocument?.keyPhrases.length ? mergeSearchQueries(scannedDocument.keyPhrases) : customKeywords;
+    const fallbackPhrases = scannedDocument ? allSearchQueriesFor(scannedDocument) : customKeywords;
     if (fallbackPhrases.length === 0) {
       return;
     }
@@ -291,18 +336,22 @@ export function App({ onInsertCitation }: Props) {
         documentId: "context-menu-selection",
         fullText: text,
         keyPhrases: [text],
+        originalKeyPhrases: [text],
         wordCount: text.split(/\s+/).filter(Boolean).length,
+        detectedLanguage: "unknown",
       };
       setScannedDocument(fallbackScan);
-      void searchPhrases(mergeSearchQueries([text]), "context-menu selection");
+      void searchPhrases(allSearchQueriesFor(fallbackScan), "context-menu selection");
     };
     window.addEventListener("acc-context-menu-selection", listener);
     return () => window.removeEventListener("acc-context-menu-selection", listener);
   }, [citationStyle, recencyPreference]);
 
   const scanSummary = scannedDocument
-    ? `Document scanned: ${scannedDocument.wordCount} words, ${mergeSearchQueries(scannedDocument.keyPhrases).length} search queries ready`
+    ? `Document scanned: ${scannedDocument.wordCount} words, ${allSearchQueriesFor(scannedDocument).length} search queries ready`
     : "Click Find Evidence to automatically scan your document and retrieve academic sources.";
+  const detectedLanguageBadge = languageBadge(scannedDocument?.detectedLanguage);
+  const queryPairs = queryPairsFor();
 
   return (
     <div className="acc-root fixed right-4 top-20 z-[2147483646] h-[calc(100vh-6rem)] w-[420px] overflow-hidden rounded-3xl border border-slate-200 bg-slate-100/95 text-slate-950 shadow-2xl backdrop-blur">
@@ -322,12 +371,19 @@ export function App({ onInsertCitation }: Props) {
                   const nextPreference = event.target.value as RecencyPreference;
                   setRecencyPreference(nextPreference);
                   if (scannedDocument?.keyPhrases.length) {
-                    void searchPhrases(mergeSearchQueries(scannedDocument.keyPhrases), "recency filter", nextPreference);
+                    void searchPhrases(allSearchQueriesFor(scannedDocument), "recency filter", nextPreference);
                   }
                 }}>
                   <option value="balanced">Balanced</option>
                   <option value="recent">Recent</option>
                   <option value="foundational">Foundational</option>
+                </select>
+                <select className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-800" value={manualLanguage} onChange={(event) => setManualLanguage(event.target.value as LanguageSelection)}>
+                  <option value="auto">Auto-detect</option>
+                  <option value="en">English</option>
+                  <option value="ja">Japanese</option>
+                  <option value="es">Spanish</option>
+                  <option value="zh">Chinese</option>
                 </select>
                 <select className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-800" value={citationStyle} onChange={(event) => setCitationStyle(event.target.value as CitationStyle)}>
                   <option value="APA">APA</option>
@@ -335,13 +391,19 @@ export function App({ onInsertCitation }: Props) {
                 </select>
               </div>
             </div>
-            <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm leading-5 text-slate-700">{scanSummary}</p>
+            <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm leading-5 text-slate-700">
+              <span>{scanSummary}</span>
+              {detectedLanguageBadge ? <span className="ml-2 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">{detectedLanguageBadge}</span> : null}
+            </div>
             {(scannedDocument?.keyPhrases.length || customKeywords.length) ? (
               <div className="mt-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Search queries</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {scannedDocument?.keyPhrases.map((phrase) => (
-                    <span key={phrase} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">{phrase}</span>
+                  {queryPairs.map(({ original, translated }) => (
+                    <span key={`${original}-${translated}`} className="flex max-w-full flex-col rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                      <span>{translated}</span>
+                      {translated.toLowerCase() !== original.toLowerCase() ? <span className="text-[10px] font-medium text-slate-400">{original}</span> : null}
+                    </span>
                   ))}
                   {customKeywords.map((keyword) => (
                     <span key={keyword} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
@@ -394,7 +456,9 @@ export function App({ onInsertCitation }: Props) {
                 <div className="mt-3 space-y-1 rounded-xl bg-slate-50 p-3">
                   <p><span className="font-semibold">Document ID:</span> {scannedDocument?.documentId ?? "none"}</p>
                   <p><span className="font-semibold">Word count:</span> {scannedDocument?.wordCount ?? 0}</p>
-                  <p><span className="font-semibold">Search queries:</span> {mergeSearchQueries(scannedDocument?.keyPhrases ?? []).join(", ") || "none"}</p>
+                  <p><span className="font-semibold">Detected language:</span> {scannedDocument?.detectedLanguage ?? "none"}</p>
+                  <p><span className="font-semibold">Language override:</span> {manualLanguage}</p>
+                  <p><span className="font-semibold">Search queries:</span> {allSearchQueriesFor().join(", ") || "none"}</p>
                   <p><span className="font-semibold">Current request method:</span> {currentRequestExtractionMethod}</p>
                   <p><span className="font-semibold">Backend health result:</span> {backendHealthResult}</p>
                   <p><span className="font-semibold">API request status:</span> {apiRequestStatus}</p>

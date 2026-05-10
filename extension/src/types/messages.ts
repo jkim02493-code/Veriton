@@ -43,9 +43,12 @@ export interface FetchDocumentTextRuntimeResponse {
 export interface ExtractTopicsMessage {
   type: "EXTRACT_TOPICS";
   text: string;
+  detectedLanguage?: string;
 }
 
 export interface ExtractTopicsRuntimeResponse {
   topics?: string[];
+  originalTopics?: string[];
+  detectedLanguage?: string;
   error?: string;
 }
