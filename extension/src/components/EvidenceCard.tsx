@@ -23,6 +23,8 @@ export function EvidenceCard({ card, citationStyle, onCopy, onInsert }: Props) {
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-medium text-slate-600">
         <span className="rounded-full bg-slate-100 px-2 py-1">{card.sourceType}</span>
+        {card.year ? <span className="rounded-full bg-slate-100 px-2 py-1">Year: {card.year}</span> : null}
+        {card.ageBucket ? <span className="rounded-full bg-slate-100 px-2 py-1">{card.ageBucket}</span> : null}
         {card.doi ? <span className="rounded-full bg-slate-100 px-2 py-1">DOI</span> : null}
       </div>
       <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm leading-5 text-slate-700">{card.snippet}</p>

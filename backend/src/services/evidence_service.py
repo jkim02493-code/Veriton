@@ -1,19 +1,46 @@
+from dataclasses import dataclass
+
 from src.config.settings import Settings
 from src.retrieval.base import RetrievalProvider
+from src.retrieval.live_provider import LiveAcademicRetrievalProvider
 from src.retrieval.mock_provider import MockRetrievalProvider
 from src.schemas.evidence import EvidenceCard
 from src.services.normalizer import normalize_provider_cards
-from src.services.ranking import rank_evidence
+from src.services.query_understanding import QueryFocus, is_ambiguous_focus, understand_query
+
+
+@dataclass
+class EvidenceRetrievalResult:
+    cards: list[EvidenceCard]
+    search_focus: str
+    live_unavailable: bool = False
+    ambiguous: bool = False
+    demo_mode: bool = False
 
 
 def get_retrieval_provider(settings: Settings) -> RetrievalProvider:
-    if settings.mock_mode:
-        return MockRetrievalProvider()
-    return MockRetrievalProvider()
+    return LiveAcademicRetrievalProvider()
 
 
-def retrieve_evidence(query: str, settings: Settings) -> list[EvidenceCard]:
+def retrieve_evidence(query: str, settings: Settings, recency_preference: str = "balanced", demo_mode: bool = False) -> EvidenceRetrievalResult:
+    focus = understand_query(query)
+    if is_ambiguous_focus(focus):
+        return EvidenceRetrievalResult(cards=[], search_focus=focus.display_topic, ambiguous=True)
+    if demo_mode:
+        demo_cards = normalize_provider_cards(MockRetrievalProvider().retrieve(focus.search_query)[:3])
+        return EvidenceRetrievalResult(cards=demo_cards, search_focus=focus.display_topic, demo_mode=True)
     provider = get_retrieval_provider(settings)
-    provider_cards = provider.retrieve(query)
-    ranked_cards = rank_evidence(provider_cards)
-    return normalize_provider_cards(ranked_cards[:3])
+    try:
+        provider_cards = _retrieve_from_provider(provider, focus, recency_preference)
+    except Exception:
+        return EvidenceRetrievalResult(cards=[], search_focus=focus.display_topic, live_unavailable=not settings.mock_mode)
+
+    cards = normalize_provider_cards(provider_cards[:3])
+    live_unavailable = isinstance(provider, LiveAcademicRetrievalProvider) and provider.last_all_providers_failed
+    return EvidenceRetrievalResult(cards=cards, search_focus=focus.display_topic, live_unavailable=live_unavailable and not settings.mock_mode)
+
+
+def _retrieve_from_provider(provider: RetrievalProvider, focus: QueryFocus, recency_preference: str):
+    if isinstance(provider, LiveAcademicRetrievalProvider):
+        return provider.retrieve(focus, recency_preference)
+    return provider.retrieve(focus.search_query)

@@ -1,6 +1,8 @@
 export type CitationStyle = "APA" | "MLA";
 export type SourceTier = "high" | "medium" | "low";
 export type CitationSourceType = "journal" | "book" | "website" | "report" | "unknown";
+export type RecencyPreference = "recent" | "balanced" | "foundational";
+export type AgeBucket = "Recent" | "Mid" | "Foundational" | "Older";
 
 export interface CitationMetadata {
   title: string;
@@ -18,6 +20,7 @@ export interface EvidenceCard {
   title: string;
   authors: string[];
   year?: string;
+  ageBucket?: AgeBucket;
   sourceType: string;
   sourceTier: SourceTier;
   url?: string;
@@ -31,12 +34,20 @@ export interface EvidenceCard {
 export interface EvidenceRequest {
   text: string;
   citationStyle: CitationStyle;
+  recencyPreference?: RecencyPreference;
+  demoMode?: boolean;
 }
 
 export interface EvidenceResponse {
   query: string;
+  searchFocus?: string;
   cards: EvidenceCard[];
+  evidence?: EvidenceCard[];
   warnings: string[];
+  error?: string;
+  message?: string;
+  retry?: boolean;
+  demoMode?: boolean;
 }
 
 export interface HealthResponse {

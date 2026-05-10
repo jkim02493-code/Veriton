@@ -1,6 +1,7 @@
 from src.citation.formatter import CitationInput, format_citations
 from src.retrieval.base import ProviderEvidence
 from src.schemas.evidence import EvidenceCard
+from src.services.query_understanding import recency_label
 
 
 def normalize_provider_card(card: ProviderEvidence) -> EvidenceCard:
@@ -21,6 +22,7 @@ def normalize_provider_card(card: ProviderEvidence) -> EvidenceCard:
         title=card.title,
         authors=card.authors,
         year=card.year,
+        ageBucket=recency_label(card.year, card.title, card.snippet),
         sourceType=card.sourceType,
         sourceTier=card.sourceTier,
         url=card.url,
