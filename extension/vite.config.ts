@@ -7,6 +7,9 @@ const isContentBuild = buildTarget === "content";
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    "process.env.NODE_ENV": JSON.stringify("production"),
+  },
   build: {
     outDir: "dist",
     emptyOutDir: isContentBuild,

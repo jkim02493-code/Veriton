@@ -16,7 +16,7 @@ Google Cloud setup required before document scanning can authenticate:
 */
 
 import type { ExtractTopicsRuntimeResponse, FetchDocumentTextRuntimeResponse } from "../types/messages";
-import { detectLanguage } from "../utils/languageDetector";
+import "../utils/languageDetector";
 
 export interface ScannedDocument {
   documentId: string;

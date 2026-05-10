@@ -7,7 +7,7 @@ import { useToasts } from "../hooks/useToasts";
 import { API_BASE_URL, BackendRequestError, findEvidence, getHealth } from "../services/api";
 import type { ScanDocumentRuntimeResponse } from "../types/messages";
 import type { ScannedDocument } from "../content/documentScanner";
-import { translateQueriesToEnglish } from "../utils/queryTranslator";
+import "../utils/queryTranslator";
 
 interface Props {
   onInsertCitation: (citation: string) => Promise<boolean>;

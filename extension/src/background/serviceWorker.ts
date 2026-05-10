@@ -1,6 +1,6 @@
 import type { EvidenceResponse, HealthResponse } from "../../../shared/types";
 import type { BackendEvidenceMessage, BackendHealthMessage, ExtractTopicsMessage, FetchDocumentTextMessage, ScanDocumentRequestedMessage } from "../types/messages";
-import { translateQueriesToEnglish } from "../utils/queryTranslator";
+import "../utils/queryTranslator";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 const REQUEST_TIMEOUT_MS = 10_000;
