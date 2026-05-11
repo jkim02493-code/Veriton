@@ -77,6 +77,40 @@ class EvidenceRequest(BaseModel):
         return normalized if normalized in {"en", "ja", "es", "zh"} else "en"
 
 
+class SearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=3000)
+    seen_urls: list[str] = Field(default_factory=list)
+    searchLanguage: str = "en"
+    citationStyle: CitationStyle = "APA"
+    recencyPreference: RecencyPreference = "balanced"
+    demoMode: bool = False
+
+    @field_validator("query")
+    @classmethod
+    def query_must_not_be_blank(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Search query cannot be empty.")
+        if any(pattern.search(normalized) for pattern in INVALID_SELECTION_PATTERNS):
+            raise ValueError("Search query appears to be a local path or shell command, not Google Docs prose.")
+        return normalized
+
+    @field_validator("searchLanguage")
+    @classmethod
+    def normalize_search_language(cls, value: str) -> str:
+        normalized = (value or "en").strip().lower()
+        return normalized if normalized in {"en", "ja", "es", "zh"} else "en"
+
+
+class UsageState(BaseModel):
+    plan: Literal["free", "pro"]
+    lifetimeSearches: int
+    searchesToday: int
+    remainingSearches: int
+    limit: int
+    resetsAt: str | None = None
+
+
 class EvidenceResponse(BaseModel):
     query: str
     searchFocus: str | None = None
@@ -89,6 +123,38 @@ class EvidenceResponse(BaseModel):
     demoMode: bool = False
 
 
+class SearchResponse(EvidenceResponse):
+    usage: UsageState
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok"]
     mockMode: bool
+
+
+class StarSourceRequest(BaseModel):
+    source: EvidenceCard
+
+
+class StarredSource(BaseModel):
+    id: str
+    source_title: str
+    authors: str | None = None
+    url: str | None = None
+    citation_apa: str | None = None
+    citation_mla: str | None = None
+    year: str | None = None
+    starred_at: str
+
+
+class SearchHistoryEntry(BaseModel):
+    id: str
+    query: str
+    sources_returned: list[EvidenceCard] = Field(default_factory=list)
+    searched_at: str
+
+
+class CurrentUserResponse(BaseModel):
+    id: str
+    email: str | None = None
+    usage: UsageState

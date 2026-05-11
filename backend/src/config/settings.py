@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     semantic_scholar_api_key: str | None = None
     openalex_api_key: str | None = None
     crossref_api_key: str | None = None
+    supabase_url: str | None = None
+    supabase_anon_key: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

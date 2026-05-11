@@ -1,10 +1,22 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import type { CitationStyle, EvidenceCard as EvidenceCardType, RecencyPreference } from "../../../shared/types";
+import type { CitationStyle, CurrentUserResponse, EvidenceCard as EvidenceCardType, RecencyPreference, SearchHistoryEntry, StarredSource, UsageState } from "../../../shared/types";
 import { EvidenceCard } from "../components/EvidenceCard";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
 import { ToastStack } from "../components/ToastStack";
 import { useToasts } from "../hooks/useToasts";
-import { API_BASE_URL, BackendRequestError, findEvidence, getHealth } from "../services/api";
+import {
+  API_BASE_URL,
+  BackendRequestError,
+  getCurrentUser,
+  getHealth,
+  getSearchHistory,
+  getStarredSources,
+  loginWithGoogle,
+  logout,
+  searchEvidence,
+  starEvidenceSource,
+  unstarEvidenceSource,
+} from "../services/api";
 import type { ScanDocumentRuntimeResponse } from "../types/messages";
 import type { ScannedDocument } from "../content/documentScanner";
 
@@ -15,6 +27,7 @@ interface Props {
 type LanguageSelection = "auto" | "en" | "ja" | "es" | "zh";
 type ThemeMode = "dark" | "light";
 type ThemeStyle = CSSProperties & Record<`--${string}`, string>;
+type SidebarTab = "search" | "starred" | "history";
 
 interface EvidenceSearchQuery {
   text: string;
@@ -91,9 +104,14 @@ function ThemeToggle({ theme, onToggle }: { theme: ThemeMode; onToggle: () => vo
   );
 }
 
-function UsageCounter({ theme }: { theme: ThemeMode }) {
-  const used = 5;
-  const total = 10;
+function UsageCounter({ theme, usage }: { theme: ThemeMode; usage: UsageState | null }) {
+  const total = usage?.limit ?? 10;
+  const used = usage ? Math.max(total - usage.remainingSearches, 0) : 0;
+  const label = usage
+    ? usage.plan === "pro"
+      ? `${used}/${total} searches used today`
+      : `${usage.lifetimeSearches}/${total} free searches used`
+    : "Sign in to track searches";
   return (
     <section className="rounded-2xl border p-4" style={cardSurfaceStyle(theme)}>
       <div className="flex items-center justify-between gap-3">
@@ -102,7 +120,7 @@ function UsageCounter({ theme }: { theme: ThemeMode }) {
             <span key={index} style={{ color: index < used ? "var(--accent)" : "var(--usage-empty)" }}>{"\u25CF"}</span>
           ))}
         </p>
-        <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>5/10 searches used today</p>
+        <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>{label}</p>
       </div>
       <button className="mt-2 text-xs font-semibold hover:opacity-80" style={{ color: "var(--accent)" }} type="button">Upgrade for unlimited</button>
     </section>
@@ -111,6 +129,14 @@ function UsageCounter({ theme }: { theme: ThemeMode }) {
 
 function cardIdentity(card: EvidenceCardType): string {
   return (card.doi || card.url || card.title || card.id).trim().toLowerCase();
+}
+
+function starredIdentity(source: StarredSource): string {
+  return (source.url || source.source_title || source.id).trim().toLowerCase();
+}
+
+function cardToStarIdentity(card: EvidenceCardType): string {
+  return (card.url || card.doi || card.title || card.id).trim().toLowerCase();
 }
 
 function rankEvidenceCards(cards: EvidenceCardType[]): EvidenceCardType[] {
@@ -180,6 +206,10 @@ function errorMessageForDisplay(error: unknown, fallbackPrefix: string): string 
 export function App({ onInsertCitation }: Props) {
   const [theme, setTheme] = useState<ThemeMode>("dark");
   const [themeLoaded, setThemeLoaded] = useState(false);
+  const [activeTab, setActiveTab] = useState<SidebarTab>("search");
+  const [currentUser, setCurrentUser] = useState<CurrentUserResponse | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [citationStyle, setCitationStyle] = useState<CitationStyle>("APA");
   const [recencyPreference, setRecencyPreference] = useState<RecencyPreference>("balanced");
   const [scannedDocument, setScannedDocument] = useState<ScannedDocument | null>(null);
@@ -188,6 +218,9 @@ export function App({ onInsertCitation }: Props) {
   const [customKeywords, setCustomKeywords] = useState<string[]>([]);
   const [excludedQueries, setExcludedQueries] = useState<string[]>([]);
   const [cards, setCards] = useState<EvidenceCardType[]>([]);
+  const [starredSources, setStarredSources] = useState<StarredSource[]>([]);
+  const [historyEntries, setHistoryEntries] = useState<SearchHistoryEntry[]>([]);
+  const [expandedHistoryIds, setExpandedHistoryIds] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [searchFocus, setSearchFocus] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -221,9 +254,56 @@ export function App({ onInsertCitation }: Props) {
     }
   }, [theme, themeLoaded]);
 
+  useEffect(() => {
+    refreshAccountData()
+      .catch((accountError: unknown) => {
+        const message = accountError instanceof Error ? accountError.message : String(accountError);
+        setAuthError(message);
+        setCurrentUser(null);
+      })
+      .finally(() => setIsAuthLoading(false));
+  }, []);
+
   function addDebugMessage(message: string) {
     const timestamp = new Date().toLocaleTimeString();
     setDebugMessages((current) => [`${timestamp} ${message}`, ...current].slice(0, 8));
+  }
+
+  async function refreshAccountData() {
+    const [user, starred, history] = await Promise.all([
+      getCurrentUser(),
+      getStarredSources(),
+      getSearchHistory(),
+    ]);
+    setCurrentUser(user);
+    setStarredSources(starred);
+    setHistoryEntries(history);
+    setAuthError(null);
+  }
+
+  async function handleLogin() {
+    setIsAuthLoading(true);
+    setAuthError(null);
+    try {
+      await loginWithGoogle();
+      await refreshAccountData();
+      showToast("Signed in.", "success");
+    } catch (loginError) {
+      const message = loginError instanceof Error ? loginError.message : String(loginError);
+      setAuthError(message);
+      showToast(message, "error");
+    } finally {
+      setIsAuthLoading(false);
+    }
+  }
+
+  async function handleLogout() {
+    await logout();
+    setCurrentUser(null);
+    setStarredSources([]);
+    setHistoryEntries([]);
+    setCards([]);
+    setAuthError("Signed out. Sign in with Google to use Veriton.");
   }
 
   function normalizeSearchQuery(query: string): string {
@@ -324,6 +404,11 @@ export function App({ onInsertCitation }: Props) {
   }
 
   async function searchPhrases(searchQueries: EvidenceSearchQuery[], sourceLabel: string, preference = recencyPreference, demoMode = false, searchLanguage = effectiveLanguageFor()) {
+    if (!currentUser) {
+      setError("Please sign in with Google to use Veriton.");
+      setActiveTab("search");
+      return;
+    }
     setIsLoading(true);
     setLoadingMessage(sourceLabel === "document scan" ? "Scanning document..." : "Finding evidence...");
     setError(null);
@@ -337,24 +422,31 @@ export function App({ onInsertCitation }: Props) {
     try {
       setApiRequestStatus("Evidence request in progress");
       const backendSearchLanguage = (searchLanguage === "ja" || searchLanguage === "es" || searchLanguage === "zh") ? searchLanguage : "en";
-      const responses = await Promise.all(searchQueries.map((query) => findEvidence({
-        text: query.text,
+      const mergedQuery = searchQueries.map((query) => query.text).filter(Boolean).join("; ");
+      if (!mergedQuery) {
+        throw new Error("No search queries are selected.");
+      }
+      const response = await searchEvidence({
+        query: mergedQuery,
+        seen_urls: [],
         searchLanguage: backendSearchLanguage,
         citationStyle,
         recencyPreference: preference,
         demoMode,
-      })));
-      const combinedCards = dedupeEvidenceCards(responses.flatMap((response) => response.cards));
-      const combinedWarnings = Array.from(new Set(responses.flatMap((response) => response.warnings))).filter((warning) => !warning.toLowerCase().includes("ambiguous"));
-      const firstSearchFocus = responses.find((response) => response.searchFocus)?.searchFocus ?? null;
+      });
+      const combinedCards = dedupeEvidenceCards(response.cards);
+      const combinedWarnings = Array.from(new Set(response.warnings)).filter((warning) => !warning.toLowerCase().includes("ambiguous"));
+      const firstSearchFocus = response.searchFocus ?? null;
 
       setApiRequestStatus("Evidence request OK");
       setCards(combinedCards);
       setWarnings(combinedWarnings);
       setSearchFocus(firstSearchFocus);
-      setCanShowDemoSources(responses.some((response) => response.error === "live_providers_unavailable" && response.retry === true));
-      setDemoSourcesActive(responses.some((response) => response.demoMode === true));
-      addDebugMessage(`Evidence response received: ${combinedCards.length} deduplicated cards from ${searchQueries.length} search queries`);
+      setCanShowDemoSources(response.error === "live_providers_unavailable" && response.retry === true);
+      setDemoSourcesActive(response.demoMode === true);
+      setCurrentUser((current) => current ? { ...current, usage: response.usage } : current);
+      void Promise.all([getStarredSources().then(setStarredSources), getSearchHistory().then(setHistoryEntries)]).catch(() => undefined);
+      addDebugMessage(`Evidence response received: ${combinedCards.length} fresh cards from ${searchQueries.length} search queries`);
 
       if (combinedCards.length === 0) {
         showToast("No strong evidence found. Try rephrasing your claim.", "info");
@@ -466,6 +558,50 @@ export function App({ onInsertCitation }: Props) {
     showToast("Citation copied. Paste into your document.", "info");
   }
 
+  function starredRecordForCard(card: EvidenceCardType): StarredSource | undefined {
+    const identity = cardToStarIdentity(card);
+    return starredSources.find((source) => starredIdentity(source) === identity);
+  }
+
+  async function toggleStarForCard(card: EvidenceCardType) {
+    if (!currentUser) {
+      setError("Please sign in with Google to star sources.");
+      return;
+    }
+    const existing = starredRecordForCard(card);
+    try {
+      if (existing) {
+        await unstarEvidenceSource(existing.id);
+        setStarredSources((current) => current.filter((source) => source.id !== existing.id));
+        showToast("Source removed from starred.", "success");
+        return;
+      }
+      const saved = await starEvidenceSource(card);
+      setStarredSources((current) => [saved, ...current]);
+      showToast("Source starred.", "success");
+    } catch (starError) {
+      const message = starError instanceof Error ? starError.message : String(starError);
+      setError(message);
+      showToast("Could not update starred source.", "error");
+    }
+  }
+
+  async function removeStarredSource(sourceId: string) {
+    try {
+      await unstarEvidenceSource(sourceId);
+      setStarredSources((current) => current.filter((source) => source.id !== sourceId));
+      showToast("Source removed.", "success");
+    } catch (starError) {
+      const message = starError instanceof Error ? starError.message : String(starError);
+      setError(message);
+      showToast("Could not remove source.", "error");
+    }
+  }
+
+  function toggleHistoryEntry(entryId: string) {
+    setExpandedHistoryIds((current) => current.includes(entryId) ? current.filter((id) => id !== entryId) : [...current, entryId]);
+  }
+
   useEffect(() => {
     const listener = (event: Event) => {
       const customEvent = event as CustomEvent<{ message: string; backendUrl?: string; httpStatus?: number | string; selectedTextPayload?: string; requestBody?: string; responseBody?: unknown }>;
@@ -539,6 +675,22 @@ export function App({ onInsertCitation }: Props) {
   const visibleGeneratedQueries = visibleGeneratedQueriesFor();
   const primaryButtonLabel = scannedDocument ? "Search with current queries" : "Find Evidence";
   const queryCount = allSearchQueriesFor(scannedDocument).length;
+  const usage = currentUser?.usage ?? null;
+  const historyGroups = historyEntries.reduce<Array<{ dateLabel: string; entries: SearchHistoryEntry[] }>>((groups, entry) => {
+    const dateLabel = new Date(entry.searched_at).toLocaleDateString();
+    const group = groups.find((item) => item.dateLabel === dateLabel);
+    if (group) {
+      group.entries.push(entry);
+    } else {
+      groups.push({ dateLabel, entries: [entry] });
+    }
+    return groups;
+  }, []);
+  const tabStyle = (tab: SidebarTab): CSSProperties => ({
+    background: activeTab === tab ? "var(--bg-input)" : "transparent",
+    borderColor: activeTab === tab ? "var(--accent)" : "var(--border)",
+    color: activeTab === tab ? "var(--accent)" : "var(--text-secondary)",
+  });
   const scanStats = scannedDocument
     ? [`\u{1F4C4} ${scannedDocument.wordCount} words`, `\u{1F50D} ${queryCount} queries`, detectedLanguageBadge].filter(Boolean)
     : ["\u{1F4C4} Ready to scan", "\u{1F50D} 0 queries"];
@@ -585,7 +737,28 @@ export function App({ onInsertCitation }: Props) {
           </div>
         </header>
         <main className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          <UsageCounter theme={theme} />
+          {!currentUser ? (
+            <section className="rounded-2xl border p-4" style={panelStyle}>
+              <h2 className="text-sm font-semibold" style={primaryTextStyle}>Sign in required</h2>
+              <p className="mt-2 text-xs leading-5" style={secondaryTextStyle}>{authError ?? "Sign in with Google to save searches, enforce usage limits, and keep starred sources synced."}</p>
+              <button className="mt-4 w-full rounded-xl px-4 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "var(--btn-primary-bg)", color: "var(--btn-primary-text)" }} onClick={handleLogin} disabled={isAuthLoading} type="button">
+                {isAuthLoading ? "Checking session..." : "Sign in with Google"}
+              </button>
+            </section>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                <button className="rounded-xl border px-3 py-2 text-xs font-semibold" style={tabStyle("search")} onClick={() => setActiveTab("search")} type="button">Search</button>
+                <button className="rounded-xl border px-3 py-2 text-xs font-semibold" style={tabStyle("starred")} onClick={() => setActiveTab("starred")} type="button">Starred</button>
+                <button className="rounded-xl border px-3 py-2 text-xs font-semibold" style={tabStyle("history")} onClick={() => setActiveTab("history")} type="button">History</button>
+              </div>
+              <div className="flex items-center justify-between text-xs" style={secondaryTextStyle}>
+                <span>{currentUser.email ?? "Signed in"}</span>
+                <button className="font-semibold hover:opacity-80" style={accentTextStyle} onClick={handleLogout} type="button">Sign out</button>
+              </div>
+              {activeTab === "search" ? (
+                <>
+          <UsageCounter theme={theme} usage={usage} />
           <section className="rounded-2xl border p-4" style={panelStyle}>
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold" style={primaryTextStyle}>Document scan</h2>
@@ -677,7 +850,7 @@ export function App({ onInsertCitation }: Props) {
             </div>
           ) : null}
           {!isLoading && !error && cards.length === 0 ? <div className="rounded-2xl border border-dashed p-6 text-center text-sm" style={emptyPanelStyle}>Click Find Evidence to automatically scan your document and retrieve academic sources.</div> : null}
-          {!isLoading && cards.length > 0 ? <section className="space-y-4">{cards.map((card) => <EvidenceCard key={card.id} card={card} citationStyle={citationStyle} documentLanguage={effectiveLanguageFor()} onCopy={copyCitation} onInsert={insertCitation} theme={theme} />)}</section> : null}
+          {!isLoading && cards.length > 0 ? <section className="space-y-4">{cards.map((card) => <EvidenceCard key={card.id} card={card} citationStyle={citationStyle} documentLanguage={effectiveLanguageFor()} isStarred={Boolean(starredRecordForCard(card))} onCopy={copyCitation} onInsert={insertCitation} onToggleStar={toggleStarForCard} theme={theme} />)}</section> : null}
           <section className="rounded-2xl border p-4 text-xs" style={{ ...panelStyle, color: "var(--text-secondary)" }}>
             <button className="flex w-full items-center justify-between text-left text-sm font-semibold" style={{ color: "var(--text-primary)" }} onClick={() => setShowDebugDetails((current) => !current)} type="button">
               <span>Debug details</span>
@@ -706,6 +879,84 @@ export function App({ onInsertCitation }: Props) {
               </>
             ) : null}
           </section>
+                </>
+              ) : null}
+              {activeTab === "starred" ? (
+                <section className="space-y-3">
+                  <div className="rounded-2xl border p-4" style={panelStyle}>
+                    <h2 className="text-sm font-semibold" style={primaryTextStyle}>Starred Sources</h2>
+                    <p className="mt-1 text-xs" style={secondaryTextStyle}>Saved sources persist across sessions.</p>
+                  </div>
+                  {starredSources.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed p-6 text-center text-sm" style={emptyPanelStyle}>No starred sources yet.</div>
+                  ) : starredSources.map((source) => (
+                    <article key={source.id} className="rounded-2xl border p-4" style={panelStyle}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-semibold leading-5" style={primaryTextStyle}>{source.source_title}</h3>
+                          <p className="mt-1 text-xs" style={secondaryTextStyle}>{source.authors || "Unknown author"}{source.year ? ` - ${source.year}` : ""}</p>
+                        </div>
+                        <button className="rounded-full border px-2 py-1 text-xs font-semibold hover:border-[var(--accent)]" style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }} onClick={() => removeStarredSource(source.id)} type="button">Unstar</button>
+                      </div>
+                      {source.url ? <button className="mt-3 break-all text-left text-xs hover:opacity-80" style={accentTextStyle} onClick={() => window.open(source.url, "_blank", "noopener,noreferrer")} type="button">{source.url}</button> : null}
+                      <div className="mt-3 space-y-2">
+                        {source.citation_apa ? (
+                          <div className="rounded-xl border p-3 text-xs" style={{ background: "var(--bg-primary)", borderColor: "var(--border)", color: "var(--text-secondary)" }}>
+                            <p className="font-semibold" style={primaryTextStyle}>APA</p>
+                            <p className="mt-1">{source.citation_apa}</p>
+                            <button className="mt-2 rounded-lg px-3 py-2 text-xs font-semibold" style={{ background: "var(--copy-bg)", color: "var(--copy-text)" }} onClick={() => copyCitation(source.citation_apa ?? "")} type="button">Copy APA</button>
+                          </div>
+                        ) : null}
+                        {source.citation_mla ? (
+                          <div className="rounded-xl border p-3 text-xs" style={{ background: "var(--bg-primary)", borderColor: "var(--border)", color: "var(--text-secondary)" }}>
+                            <p className="font-semibold" style={primaryTextStyle}>MLA</p>
+                            <p className="mt-1">{source.citation_mla}</p>
+                            <button className="mt-2 rounded-lg px-3 py-2 text-xs font-semibold" style={{ background: "var(--copy-bg)", color: "var(--copy-text)" }} onClick={() => copyCitation(source.citation_mla ?? "")} type="button">Copy MLA</button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                </section>
+              ) : null}
+              {activeTab === "history" ? (
+                <section className="space-y-3">
+                  <div className="rounded-2xl border p-4" style={panelStyle}>
+                    <h2 className="text-sm font-semibold" style={primaryTextStyle}>Search History</h2>
+                    <p className="mt-1 text-xs" style={secondaryTextStyle}>Past searches are grouped by request and saved to Supabase.</p>
+                  </div>
+                  {historyEntries.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed p-6 text-center text-sm" style={emptyPanelStyle}>No search history yet.</div>
+                  ) : historyGroups.map((group) => (
+                    <div key={group.dateLabel} className="space-y-2">
+                      <p className="px-1 text-xs font-semibold uppercase tracking-[0.12em]" style={mutedTextStyle}>{group.dateLabel}</p>
+                      {group.entries.map((entry) => {
+                        const expanded = expandedHistoryIds.includes(entry.id);
+                        return (
+                          <article key={entry.id} className="rounded-2xl border p-4" style={panelStyle}>
+                            <button className="flex w-full items-start justify-between gap-3 text-left" onClick={() => toggleHistoryEntry(entry.id)} type="button">
+                              <span>
+                                <span className="block text-sm font-semibold" style={primaryTextStyle}>{entry.query}</span>
+                                <span className="mt-1 block text-xs" style={secondaryTextStyle}>{new Date(entry.searched_at).toLocaleTimeString()}</span>
+                              </span>
+                              <span className="text-xs font-semibold" style={accentTextStyle}>{expanded ? "Hide" : "Show"}</span>
+                            </button>
+                            {expanded ? (
+                              <div className="mt-3 space-y-3">
+                                {entry.sources_returned.map((source) => (
+                                  <EvidenceCard key={`${entry.id}-${source.id}`} card={source} citationStyle={citationStyle} documentLanguage={effectiveLanguageFor()} isStarred={Boolean(starredRecordForCard(source))} onCopy={copyCitation} onInsert={insertCitation} onToggleStar={toggleStarForCard} theme={theme} />
+                                ))}
+                              </div>
+                            ) : null}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </section>
+              ) : null}
+            </>
+          )}
         </main>
       </div>
     </div>

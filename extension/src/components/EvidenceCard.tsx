@@ -7,8 +7,10 @@ interface Props {
   citationStyle: CitationStyle;
   documentLanguage?: string;
   theme: "dark" | "light";
+  isStarred?: boolean;
   onCopy: (citation: string) => void;
   onInsert: (citation: string) => void;
+  onToggleStar?: (card: EvidenceCardType) => void;
 }
 
 function sourceLanguageBadge(card: EvidenceCardType, documentLanguage?: string): string | null {
@@ -41,7 +43,7 @@ function tierStyle(tier: EvidenceCardType["sourceTier"], theme: "dark" | "light"
   return { background: "rgba(100, 116, 139, 0.10)", borderColor: "rgba(100, 116, 139, 0.30)", color: "#94a3b8" };
 }
 
-export function EvidenceCard({ card, citationStyle, documentLanguage, theme, onCopy, onInsert }: Props) {
+export function EvidenceCard({ card, citationStyle, documentLanguage, theme, isStarred = false, onCopy, onInsert, onToggleStar }: Props) {
   const selectedCitation = citationForStyle(card, citationStyle);
   const languageBadge = sourceLanguageBadge(card, documentLanguage);
   const surfaceStyle = {
@@ -62,7 +64,20 @@ export function EvidenceCard({ card, citationStyle, documentLanguage, theme, onC
           <h3 className="text-sm font-semibold leading-5" style={{ color: "var(--text-primary)" }}>{card.title}</h3>
           <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>{card.authors.join(", ") || "Unknown author"}{card.year ? ` - ${card.year}` : ""}</p>
         </div>
-        <span className="shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide" style={tierStyle(card.sourceTier, theme)}>{card.sourceTier}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          {onToggleStar ? (
+            <button
+              aria-label={isStarred ? `Unstar ${card.title}` : `Star ${card.title}`}
+              className="flex h-8 w-8 items-center justify-center rounded-full border text-base transition hover:border-[var(--accent)]"
+              onClick={() => onToggleStar(card)}
+              style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: isStarred ? "var(--accent)" : "var(--text-secondary)" }}
+              type="button"
+            >
+              {isStarred ? "★" : "☆"}
+            </button>
+          ) : null}
+          <span className="rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide" style={tierStyle(card.sourceTier, theme)}>{card.sourceTier}</span>
+        </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-medium">
         <span className="rounded-full border px-2 py-1" style={pillStyle}>{card.sourceType}</span>

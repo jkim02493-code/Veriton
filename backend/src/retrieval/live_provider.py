@@ -40,6 +40,7 @@ class LiveAcademicRetrievalProvider:
         self._query_suffix = query_suffix
         self._search_language = search_language
         try:
+            all_relevant: list[ProviderEvidence] = []
             for provider_name, provider in (
                 ("OpenAlex", self._openalex),
                 ("Crossref", self._crossref),
@@ -62,13 +63,21 @@ class LiveAcademicRetrievalProvider:
                 relevant = self._rank_and_filter(focus, cards, recency_preference)
                 self.last_attempts.append(ProviderAttempt(name=provider_name, endpoint=endpoint, raw_count=len(cards), relevant_count=len(relevant)))
                 if relevant:
-                    return relevant
+                    all_relevant.extend(relevant)
 
             self.last_all_providers_failed = all(attempt.failed or attempt.raw_count == 0 for attempt in self.last_attempts)
-            return []
+            return self._dedupe_provider_cards(all_relevant)
         finally:
             self._query_suffix = previous_query_suffix
             self._search_language = previous_search_language
+
+    def _dedupe_provider_cards(self, cards: list[ProviderEvidence]) -> list[ProviderEvidence]:
+        unique: dict[str, ProviderEvidence] = {}
+        for card in cards:
+            key = (card.doi or card.url or card.title).lower()
+            if key and key not in unique:
+                unique[key] = card
+        return list(unique.values())[:10]
 
     def _call_provider_with_timeout(self, provider: Callable[[QueryFocus], tuple[str, list[ProviderEvidence]]], focus: QueryFocus) -> tuple[str, list[ProviderEvidence]]:
         executor = ThreadPoolExecutor(max_workers=1)

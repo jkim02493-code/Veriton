@@ -1,9 +1,35 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from src.config.settings import Settings, get_settings
-from src.schemas.evidence import EvidenceRequest, EvidenceResponse, HealthResponse
+from src.schemas.evidence import (
+    CurrentUserResponse,
+    EvidenceCard,
+    EvidenceRequest,
+    EvidenceResponse,
+    HealthResponse,
+    SearchHistoryEntry,
+    SearchRequest,
+    SearchResponse,
+    StarSourceRequest,
+    StarredSource,
+)
 from src.services.evidence_service import retrieve_evidence
+from src.services.supabase_service import (
+    SupabaseConfigError,
+    UsageLimitError,
+    delete_starred_source,
+    enforce_and_increment_search_limit,
+    ensure_user_profile,
+    get_search_history,
+    get_seen_source_urls,
+    get_starred_sources,
+    save_search_history,
+    save_seen_sources,
+    star_source,
+    usage_from_profile,
+    verify_supabase_jwt,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -50,6 +76,132 @@ def evidence(request: EvidenceRequest, settings: Settings = Depends(get_settings
         retry=result.live_unavailable,
         demoMode=result.demo_mode,
     )
+
+
+@router.get("/me", response_model=CurrentUserResponse)
+def current_user(authorization: str | None = Header(default=None), settings: Settings = Depends(get_settings)) -> CurrentUserResponse:
+    try:
+        user = verify_supabase_jwt(authorization, settings)
+        profile = ensure_user_profile(user, settings)
+    except SupabaseConfigError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"message": str(exc)}) from exc
+    return CurrentUserResponse(id=user.id, email=user.email or profile.email, usage=usage_from_profile(profile))
+
+
+@router.post("/search", response_model=SearchResponse)
+def search(request: SearchRequest, authorization: str | None = Header(default=None), settings: Settings = Depends(get_settings)) -> SearchResponse:
+    try:
+        user = verify_supabase_jwt(authorization, settings)
+        usage = enforce_and_increment_search_limit(user, settings)
+        already_seen = set(_normalize_url(url) for url in get_seen_source_urls(user, settings))
+        already_seen.update(_normalize_url(url) for url in request.seen_urls)
+    except SupabaseConfigError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"message": str(exc)}) from exc
+    except UsageLimitError as exc:
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail={"message": str(exc), "usage": exc.usage.model_dump()}) from exc
+
+    try:
+        result = retrieve_evidence(
+            request.query,
+            settings,
+            request.recencyPreference,
+            request.demoMode,
+            request.searchLanguage,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"error": "retrieval_failed", "message": "Evidence retrieval failed. Please try again."},
+        ) from exc
+
+    fresh_cards = _fresh_cards(result.cards, already_seen)
+    fresh_urls = [_source_url(card) for card in fresh_cards if _source_url(card)]
+
+    save_search_history(user, settings, request.query, fresh_cards)
+    save_seen_sources(user, settings, fresh_urls)
+
+    warnings = []
+    if result.live_unavailable:
+        warnings.append("Live academic search is temporarily unavailable.")
+    elif not fresh_cards:
+        warnings.append("No fresh sources found for this search.")
+    if result.demo_mode and fresh_cards:
+        warnings.append("Demo sources - not live results.")
+
+    return SearchResponse(
+        query=request.query,
+        searchFocus=result.search_focus,
+        cards=fresh_cards,
+        evidence=fresh_cards,
+        warnings=warnings,
+        error="live_providers_unavailable" if result.live_unavailable else None,
+        message="Live academic search is temporarily unavailable." if result.live_unavailable else None,
+        retry=result.live_unavailable,
+        demoMode=result.demo_mode,
+        usage=usage,
+    )
+
+
+@router.post("/star", response_model=StarredSource)
+def star(request: StarSourceRequest, authorization: str | None = Header(default=None), settings: Settings = Depends(get_settings)) -> StarredSource:
+    try:
+        user = verify_supabase_jwt(authorization, settings)
+        ensure_user_profile(user, settings)
+        row = star_source(user, settings, request.source)
+    except SupabaseConfigError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"message": str(exc)}) from exc
+    return StarredSource(**row)
+
+
+@router.delete("/star/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unstar(source_id: str, authorization: str | None = Header(default=None), settings: Settings = Depends(get_settings)) -> None:
+    try:
+        user = verify_supabase_jwt(authorization, settings)
+        delete_starred_source(user, settings, source_id)
+    except SupabaseConfigError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"message": str(exc)}) from exc
+
+
+@router.get("/starred", response_model=list[StarredSource])
+def starred(authorization: str | None = Header(default=None), settings: Settings = Depends(get_settings)) -> list[StarredSource]:
+    try:
+        user = verify_supabase_jwt(authorization, settings)
+        rows = get_starred_sources(user, settings)
+    except SupabaseConfigError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"message": str(exc)}) from exc
+    return [StarredSource(**row) for row in rows]
+
+
+@router.get("/history", response_model=list[SearchHistoryEntry])
+def history(authorization: str | None = Header(default=None), settings: Settings = Depends(get_settings)) -> list[SearchHistoryEntry]:
+    try:
+        user = verify_supabase_jwt(authorization, settings)
+        rows = get_search_history(user, settings)
+    except SupabaseConfigError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"message": str(exc)}) from exc
+    return [SearchHistoryEntry(**row) for row in rows]
+
+
+def _source_url(card: EvidenceCard) -> str:
+    return card.url or card.doi or ""
+
+
+def _normalize_url(url: str | None) -> str:
+    return (url or "").strip().rstrip("/").lower()
+
+
+def _fresh_cards(cards: list[EvidenceCard], already_seen: set[str]) -> list[EvidenceCard]:
+    fresh: list[EvidenceCard] = []
+    for card in cards:
+        normalized_url = _normalize_url(_source_url(card))
+        if normalized_url and normalized_url in already_seen:
+            continue
+        fresh.append(card)
+        if normalized_url:
+            already_seen.add(normalized_url)
+        if len(fresh) >= 5:
+            break
+    return fresh
 
 
 @router.post("/extract-topics")

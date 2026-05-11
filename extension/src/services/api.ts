@@ -1,7 +1,19 @@
-import type { EvidenceRequest, EvidenceResponse, HealthResponse } from "../../../shared/types";
-import type { BackendEvidenceMessage, BackendHealthMessage } from "../types/messages";
+import type { CurrentUserResponse, EvidenceCard, EvidenceRequest, EvidenceResponse, HealthResponse, SearchHistoryEntry, SearchRequest, SearchResponse, StarredSource, SupabaseSession } from "../../../shared/types";
+import type {
+  BackendEvidenceMessage,
+  BackendHealthMessage,
+  BackendHistoryMessage,
+  BackendMeMessage,
+  BackendSearchMessage,
+  BackendStarMessage,
+  BackendStarredMessage,
+  BackendUnstarMessage,
+  SupabaseLoginMessage,
+  SupabaseLogoutMessage,
+  SupabaseSessionMessage,
+} from "../types/messages";
 
-export const API_BASE_URL = "http://127.0.0.1:8000";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 interface ApiDebugDetail {
   message: string;
@@ -45,27 +57,88 @@ function devLog(message: string, value?: unknown): void {
   }
 }
 
-function sendBackendMessage<T>(message: BackendHealthMessage | BackendEvidenceMessage): Promise<T> {
+function backendUrlForMessage(message: RuntimeApiMessage): string {
+  if (message.type === "BACKEND_EVIDENCE") {
+    return `${API_BASE_URL}/evidence`;
+  }
+  if (message.type === "BACKEND_SEARCH") {
+    return `${API_BASE_URL}/search`;
+  }
+  if (message.type === "BACKEND_ME") {
+    return `${API_BASE_URL}/me`;
+  }
+  if (message.type === "BACKEND_STAR") {
+    return `${API_BASE_URL}/star`;
+  }
+  if (message.type === "BACKEND_UNSTAR") {
+    return `${API_BASE_URL}/star/${message.sourceId}`;
+  }
+  if (message.type === "BACKEND_STARRED") {
+    return `${API_BASE_URL}/starred`;
+  }
+  if (message.type === "BACKEND_HISTORY") {
+    return `${API_BASE_URL}/history`;
+  }
+  return `${API_BASE_URL}/health`;
+}
+
+type RuntimeApiMessage =
+  | BackendHealthMessage
+  | BackendEvidenceMessage
+  | BackendSearchMessage
+  | BackendMeMessage
+  | BackendStarMessage
+  | BackendUnstarMessage
+  | BackendStarredMessage
+  | BackendHistoryMessage
+  | SupabaseLoginMessage
+  | SupabaseLogoutMessage
+  | SupabaseSessionMessage;
+
+function requestTextForMessage(message: RuntimeApiMessage): string | undefined {
+  if (message.type === "BACKEND_EVIDENCE") {
+    return message.request.text;
+  }
+  if (message.type === "BACKEND_SEARCH") {
+    return message.request.query;
+  }
+  return undefined;
+}
+
+function requestBodyForMessage(message: RuntimeApiMessage): string | undefined {
+  if (message.type === "BACKEND_EVIDENCE" || message.type === "BACKEND_SEARCH") {
+    return JSON.stringify(message.request);
+  }
+  if (message.type === "BACKEND_STAR") {
+    return JSON.stringify({ source: message.source });
+  }
+  return undefined;
+}
+
+function sendBackendMessage<T>(message: RuntimeApiMessage): Promise<T> {
   return new Promise((resolve, reject) => {
     try {
       chrome.runtime.sendMessage(message, (response: BackendRuntimeResponse<T> | undefined) => {
+        const backendUrl = backendUrlForMessage(message);
+        const selectedTextPayload = requestTextForMessage(message);
+        const requestBody = requestBodyForMessage(message);
         if (chrome.runtime.lastError) {
           const runtimeErrorMessage = chrome.runtime.lastError.message ?? "Chrome runtime messaging failed";
           emitApiDebug({
             message: `API request failed: ${runtimeErrorMessage}`,
-            backendUrl: message.type === "BACKEND_EVIDENCE" ? `${API_BASE_URL}/evidence` : `${API_BASE_URL}/health`,
+            backendUrl,
             httpStatus: runtimeErrorMessage,
-            selectedTextPayload: message.type === "BACKEND_EVIDENCE" ? message.request.text : undefined,
-            requestBody: message.type === "BACKEND_EVIDENCE" ? JSON.stringify(message.request) : undefined,
+            selectedTextPayload,
+            requestBody,
           });
-          reject(new BackendRequestError(runtimeErrorMessage, message.type === "BACKEND_EVIDENCE" ? `${API_BASE_URL}/evidence` : `${API_BASE_URL}/health`, runtimeErrorMessage, message.type === "BACKEND_EVIDENCE" ? JSON.stringify(message.request) : undefined));
+          reject(new BackendRequestError(runtimeErrorMessage, backendUrl, runtimeErrorMessage, requestBody));
           return;
         }
         emitApiDebug({
           message: response?.status ?? "API request completed",
           backendUrl: response?.backendUrl,
           httpStatus: response?.httpStatus ?? response?.error,
-          selectedTextPayload: message.type === "BACKEND_EVIDENCE" ? message.request.text : undefined,
+          selectedTextPayload,
           requestBody: response?.requestBody,
           responseBody: response?.responseBody,
         });
@@ -77,14 +150,16 @@ function sendBackendMessage<T>(message: BackendHealthMessage | BackendEvidenceMe
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      const backendUrl = backendUrlForMessage(message);
+      const requestBody = requestBodyForMessage(message);
       emitApiDebug({
         message: `API request failed: ${errorMessage}`,
-        backendUrl: message.type === "BACKEND_EVIDENCE" ? `${API_BASE_URL}/evidence` : `${API_BASE_URL}/health`,
+        backendUrl,
         httpStatus: errorMessage,
-        selectedTextPayload: message.type === "BACKEND_EVIDENCE" ? message.request.text : undefined,
-        requestBody: message.type === "BACKEND_EVIDENCE" ? JSON.stringify(message.request) : undefined,
+        selectedTextPayload: requestTextForMessage(message),
+        requestBody,
       });
-      reject(new BackendRequestError(errorMessage, message.type === "BACKEND_EVIDENCE" ? `${API_BASE_URL}/evidence` : `${API_BASE_URL}/health`, errorMessage, message.type === "BACKEND_EVIDENCE" ? JSON.stringify(message.request) : undefined));
+      reject(new BackendRequestError(errorMessage, backendUrl, errorMessage, requestBody));
     }
   });
 }
@@ -103,4 +178,46 @@ export function findEvidence(request: EvidenceRequest): Promise<EvidenceResponse
     requestBody: JSON.stringify(request),
   });
   return sendBackendMessage<EvidenceResponse>({ type: "BACKEND_EVIDENCE", request });
+}
+
+export function getCurrentUser(): Promise<CurrentUserResponse> {
+  return sendBackendMessage<CurrentUserResponse>({ type: "BACKEND_ME" });
+}
+
+export function loginWithGoogle(): Promise<SupabaseSession> {
+  return sendBackendMessage<SupabaseSession>({ type: "SUPABASE_LOGIN" });
+}
+
+export function getStoredSession(): Promise<SupabaseSession> {
+  return sendBackendMessage<SupabaseSession>({ type: "SUPABASE_SESSION" });
+}
+
+export function logout(): Promise<void> {
+  return sendBackendMessage<void>({ type: "SUPABASE_LOGOUT" });
+}
+
+export function searchEvidence(request: SearchRequest): Promise<SearchResponse> {
+  emitApiDebug({
+    message: "Authenticated search request sent via service worker",
+    backendUrl: `${API_BASE_URL}/search`,
+    selectedTextPayload: request.query,
+    requestBody: JSON.stringify(request),
+  });
+  return sendBackendMessage<SearchResponse>({ type: "BACKEND_SEARCH", request });
+}
+
+export function starEvidenceSource(source: EvidenceCard): Promise<StarredSource> {
+  return sendBackendMessage<StarredSource>({ type: "BACKEND_STAR", source });
+}
+
+export function unstarEvidenceSource(sourceId: string): Promise<void> {
+  return sendBackendMessage<void>({ type: "BACKEND_UNSTAR", sourceId });
+}
+
+export function getStarredSources(): Promise<StarredSource[]> {
+  return sendBackendMessage<StarredSource[]>({ type: "BACKEND_STARRED" });
+}
+
+export function getSearchHistory(): Promise<SearchHistoryEntry[]> {
+  return sendBackendMessage<SearchHistoryEntry[]>({ type: "BACKEND_HISTORY" });
 }

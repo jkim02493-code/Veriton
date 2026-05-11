@@ -41,6 +41,15 @@ export interface EvidenceRequest {
   demoMode?: boolean;
 }
 
+export interface UsageState {
+  plan: "free" | "pro";
+  lifetimeSearches: number;
+  searchesToday: number;
+  remainingSearches: number;
+  limit: number;
+  resetsAt?: string | null;
+}
+
 export interface EvidenceResponse {
   query: string;
   searchFocus?: string;
@@ -51,6 +60,50 @@ export interface EvidenceResponse {
   message?: string;
   retry?: boolean;
   demoMode?: boolean;
+}
+
+export interface SearchRequest {
+  query: string;
+  seen_urls: string[];
+  searchLanguage?: "en" | "ja" | "es" | "zh" | "unknown";
+  citationStyle?: CitationStyle;
+  recencyPreference?: RecencyPreference;
+  demoMode?: boolean;
+}
+
+export interface SearchResponse extends EvidenceResponse {
+  usage: UsageState;
+}
+
+export interface StarredSource {
+  id: string;
+  source_title: string;
+  authors?: string;
+  url?: string;
+  citation_apa?: string;
+  citation_mla?: string;
+  year?: string;
+  starred_at: string;
+}
+
+export interface SearchHistoryEntry {
+  id: string;
+  query: string;
+  sources_returned: EvidenceCard[];
+  searched_at: string;
+}
+
+export interface CurrentUserResponse {
+  id: string;
+  email?: string;
+  usage: UsageState;
+}
+
+export interface SupabaseSession {
+  access_token: string;
+  refresh_token?: string;
+  expires_at?: number;
+  token_type?: string;
 }
 
 export interface HealthResponse {

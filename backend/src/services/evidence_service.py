@@ -43,7 +43,7 @@ def retrieve_evidence(query: str, settings: Settings, recency_preference: str = 
     except Exception:
         return EvidenceRetrievalResult(cards=[], search_focus=focus.display_topic, live_unavailable=not settings.mock_mode)
 
-    cards = normalize_provider_cards(provider_cards[:3])
+    cards = normalize_provider_cards(provider_cards[:10])
     live_unavailable = isinstance(provider, LiveAcademicRetrievalProvider) and provider.last_all_providers_failed
     return EvidenceRetrievalResult(cards=cards, search_focus=focus.display_topic, live_unavailable=live_unavailable and not settings.mock_mode)
 

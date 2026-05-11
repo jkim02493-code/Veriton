@@ -9,7 +9,9 @@
     "https://docs.googleapis.com/*",
     "https://www.googleapis.com/*",
     "http://127.0.0.1:8000/*",
-    "http://localhost:8000/*"
+    "http://localhost:8000/*",
+    "https://*.onrender.com/*",
+    "https://*.supabase.co/*"
   ],
   "oauth2": {
     "client_id": "791076560067-j2nllerjfn5imf0qv04fq591lab558t2.apps.googleusercontent.com",
