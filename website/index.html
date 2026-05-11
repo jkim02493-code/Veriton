@@ -769,7 +769,19 @@
 </head>
 <body>
   <nav class="nav" id="nav">
-    <a class="brand" href="#">Veriton</a>
+    <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+      <svg width="36" height="36" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="navGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#6C3DE8"/>
+            <stop offset="100%" style="stop-color:#C84B31"/>
+          </linearGradient>
+        </defs>
+        <rect width="80" height="80" rx="18" fill="url(#navGrad)"/>
+        <polygon points="15,20 40,64 65,20 57,20 40,56 23,20" fill="white"/>
+      </svg>
+      <span style="font-family:'Inter',sans-serif;font-size:18px;font-weight:800;color:#111;letter-spacing:-0.5px;">Veriton</span>
+    </a>
     <a class="nav-link" href="privacy.html">Privacy Policy</a>
   </nav>
 
