@@ -8,8 +8,7 @@
     "https://docs.google.com/*",
     "https://docs.googleapis.com/*",
     "https://www.googleapis.com/*",
-    "http://127.0.0.1:8000/*",
-    "http://localhost:8000/*",
+    "https://veriton.onrender.com/*",
     "https://*.onrender.com/*",
     "https://*.supabase.co/*"
   ],

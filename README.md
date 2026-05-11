@@ -6,7 +6,7 @@ A production-quality MVP for a Chrome-extension-based academic evidence and cita
 
 - **Chrome Extension MV3 frontend:** React, TypeScript, Vite, and Tailwind run as a Google Docs content script.
 - **Shadow DOM sidebar:** The content script mounts React inside a Shadow DOM root to avoid Google Docs CSS collisions.
-- **FastAPI backend:** A local API at `http://localhost:8000` exposes `/health` and `/evidence`.
+- **FastAPI backend:** A Render API at `https://veriton.onrender.com` exposes `/health` and `/evidence`.
 - **Retrieval pipeline:** The route calls a retrieval service, provider interface, mock provider, ranking utility, and normalizer before returning canonical evidence cards.
 - **No LLM APIs:** MVP v1 uses deterministic citation formatting and mock retrieval only.
 
@@ -79,11 +79,11 @@ Backend variables live in `backend/.env` and are documented in `backend/.env.exa
 | `OPENALEX_API_KEY` | Future provider placeholder. |
 | `CROSSREF_API_KEY` | Future provider placeholder. |
 
-Extension API configuration uses `VITE_API_BASE_URL`; if omitted, it defaults to `http://localhost:8000`.
+Extension API configuration uses `VITE_API_BASE_URL`; if omitted, it defaults to `https://veriton.onrender.com`.
 
 ## Local backend URL and CORS notes
 
-The extension calls `http://localhost:8000/evidence` directly from the sidebar React app. FastAPI CORS allows configured local origins and Chrome extension origins for local development.
+The extension calls `https://veriton.onrender.com/evidence` through the service worker. FastAPI CORS allows configured Chrome extension origins.
 
 ## API endpoints
 
