@@ -6,17 +6,18 @@
   <title>Veriton &mdash; Academic Evidence Finder</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     :root {
       --bg: #080808;
-      --panel: #111;
+      --panel: #111111;
       --line: #232323;
-      --text: #F0EDE6;
-      --muted: #77736C;
-      --muted-deep: #3E3E3E;
+      --line-warm: rgba(200, 75, 49, 0.28);
+      --text: #FFFFFF;
+      --muted: #AAAAAA;
+      --muted-deep: #4A4A4A;
       --orange: #C84B31;
-      --white: #fff;
+      --black: #000000;
     }
 
     * {
@@ -64,28 +65,26 @@
 
     .brand {
       color: var(--text);
-      font-family: "Playfair Display", Georgia, serif;
       font-size: 18px;
-      font-variant: small-caps;
       font-weight: 700;
-      letter-spacing: 0.22em;
+      letter-spacing: 0.06em;
     }
 
     .nav-link {
       color: var(--muted);
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
       transition: color 0.2s ease;
     }
 
     .nav-link:hover {
-      color: var(--text);
+      color: var(--orange);
     }
 
     .section {
       margin: 0 auto;
       max-width: 1180px;
-      padding: 120px 7vw;
+      padding: 148px 7vw;
     }
 
     .reveal {
@@ -105,17 +104,16 @@
       gap: 8vw;
       grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
       min-height: calc(100vh - 73px);
-      padding-bottom: 80px;
-      padding-top: 80px;
+      padding-bottom: 96px;
+      padding-top: 96px;
     }
 
     .headline {
       color: var(--text);
-      font-family: "Playfair Display", Georgia, serif;
-      font-size: clamp(78px, 11vw, 160px);
+      font-size: clamp(58px, 8vw, 72px);
       font-weight: 800;
-      letter-spacing: -0.04em;
-      line-height: 0.86;
+      letter-spacing: -0.02em;
+      line-height: 0.96;
     }
 
     .headline span {
@@ -142,8 +140,8 @@
     .eyebrow {
       color: var(--orange);
       font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.18em;
+      font-weight: 800;
+      letter-spacing: 0.16em;
       margin-top: 34px;
       text-transform: uppercase;
     }
@@ -153,22 +151,23 @@
       font-size: clamp(16px, 2vw, 19px);
       line-height: 1.7;
       margin-top: 18px;
-      max-width: 570px;
+      max-width: 640px;
     }
 
     .cta {
+      background: var(--text);
       border: 1px solid var(--text);
-      color: var(--text);
+      color: var(--black);
       display: inline-flex;
       font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
+      font-weight: 800;
+      letter-spacing: 0.06em;
       margin-top: 38px;
       overflow: hidden;
       padding: 17px 32px;
       position: relative;
       text-transform: uppercase;
-      transition: border-color 0.3s ease;
+      transition: border-color 0.3s ease, color 0.3s ease;
     }
 
     .cta::before {
@@ -183,6 +182,7 @@
 
     .cta:hover {
       border-color: var(--orange);
+      color: var(--text);
     }
 
     .cta:hover::before {
@@ -227,12 +227,11 @@
 
     .section-title {
       color: var(--text);
-      font-family: "Playfair Display", Georgia, serif;
-      font-size: clamp(44px, 6vw, 76px);
-      font-weight: 700;
-      letter-spacing: -0.035em;
+      font-size: clamp(42px, 6vw, 64px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
       line-height: 1;
-      margin-bottom: 60px;
+      margin-bottom: 66px;
     }
 
     .steps {
@@ -247,38 +246,44 @@
     }
 
     .step-number {
-      color: var(--muted-deep);
+      color: var(--orange);
       display: block;
-      font-family: "Playfair Display", Georgia, serif;
-      font-size: clamp(54px, 7vw, 88px);
+      font-size: clamp(48px, 7vw, 76px);
       font-weight: 800;
+      letter-spacing: -0.03em;
       line-height: 0.9;
       margin-bottom: 24px;
     }
 
     .step-title {
-      color: var(--white);
+      color: var(--text);
       font-size: 18px;
-      font-weight: 600;
+      font-weight: 700;
     }
 
     .feature-grid {
       display: grid;
-      gap: 1px;
+      gap: 18px;
       grid-template-columns: repeat(2, 1fr);
     }
 
     .feature {
       background: var(--panel);
       border: 1px solid var(--line);
+      border-radius: 8px;
       min-height: 230px;
       padding: 42px;
+      transition: border-color 0.2s ease;
+    }
+
+    .feature:hover {
+      border-color: var(--line-warm);
     }
 
     .feature h3 {
-      color: var(--white);
+      color: var(--text);
       font-size: 21px;
-      font-weight: 700;
+      font-weight: 800;
       margin-bottom: 18px;
     }
 
@@ -298,6 +303,7 @@
     .plan {
       background: var(--panel);
       border: 1px solid var(--line);
+      border-radius: 8px;
       padding: 48px;
       transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     }
@@ -312,28 +318,51 @@
       transform: translateY(-4px);
     }
 
+    .plan-header {
+      align-items: center;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+
     .plan h3 {
-      color: var(--white);
+      color: var(--text);
       font-size: 18px;
-      font-weight: 700;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .plan-subline {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .badge {
+      border: 1px solid var(--orange);
+      color: var(--orange);
+      flex: 0 0 auto;
+      font-size: 11px;
+      font-weight: 800;
       letter-spacing: 0.08em;
+      padding: 7px 10px;
       text-transform: uppercase;
     }
 
     .price {
       color: var(--text);
-      font-family: "Playfair Display", Georgia, serif;
-      font-size: 58px;
+      font-size: 54px;
       font-weight: 800;
-      letter-spacing: -0.04em;
-      margin: 26px 0 28px;
+      letter-spacing: -0.03em;
+      margin: 30px 0 28px;
     }
 
     .price small {
       color: var(--muted);
-      font-family: "Inter", sans-serif;
       font-size: 16px;
-      font-weight: 500;
+      font-weight: 600;
       letter-spacing: 0;
     }
 
@@ -356,9 +385,9 @@
       display: flex;
       font-size: 13px;
       justify-content: space-between;
-      margin: 40px auto 0;
+      margin: 60px auto 0;
       max-width: 1180px;
-      padding: 34px 7vw;
+      padding: 42px 7vw;
     }
 
     .footer-links {
@@ -371,7 +400,7 @@
     }
 
     .footer a:hover {
-      color: var(--text);
+      color: var(--orange);
     }
 
     @media (max-width: 860px) {
@@ -381,14 +410,14 @@
       }
 
       .section {
-        padding: 86px 24px;
+        padding: 104px 24px;
       }
 
       .hero {
         gap: 48px;
         grid-template-columns: 1fr;
         min-height: auto;
-        padding-top: 84px;
+        padding-top: 88px;
       }
 
       .document-visual {
@@ -414,12 +443,11 @@
 
     @media (max-width: 520px) {
       .headline {
-        font-size: clamp(62px, 19vw, 84px);
+        font-size: clamp(54px, 16vw, 68px);
       }
 
       .brand {
         font-size: 16px;
-        letter-spacing: 0.16em;
       }
 
       .nav-link {
@@ -442,7 +470,7 @@
           <span>Instantly.</span>
         </h1>
         <p class="eyebrow">Academic Research Tool</p>
-        <p class="hero-copy">Highlight any claim inside Google Docs and receive real peer-reviewed sources with APA and MLA citations in seconds.</p>
+        <p class="hero-copy">Open any Google Doc, click Find Evidence, and get real peer-reviewed academic sources with APA and MLA citations in seconds. No searching. No guessing. Just evidence that actually holds up.</p>
         <a class="cta" href="#"><span>Install Free</span></a>
       </div>
       <div class="abstract" aria-hidden="true">
@@ -498,8 +526,11 @@
       <h2 class="section-title">Simple.</h2>
       <div class="plans">
         <article class="plan">
-          <h3>Free</h3>
-          <div class="price">¥0</div>
+          <div class="plan-header">
+            <h3>Free</h3>
+          </div>
+          <p class="plan-subline">Great for getting started</p>
+          <div class="price">&yen;0</div>
           <ul>
             <li>10 searches lifetime</li>
             <li>APA and MLA citations</li>
@@ -508,8 +539,12 @@
           </ul>
         </article>
         <article class="plan pro">
-          <h3>Pro</h3>
-          <div class="price">¥980<small>/mo</small></div>
+          <div class="plan-header">
+            <h3>Pro</h3>
+            <span class="badge">Most popular</span>
+          </div>
+          <p class="plan-subline">Daily support for serious writing</p>
+          <div class="price">&yen;980<small>/mo</small></div>
           <ul>
             <li>10 searches per day</li>
             <li>APA and MLA citations</li>
@@ -523,7 +558,7 @@
   </main>
 
   <footer class="footer reveal">
-    <p>© 2026 Veriton</p>
+    <p>&copy; 2026 Veriton</p>
     <div class="footer-links">
       <a href="privacy.html">Privacy Policy</a>
       <a href="mailto:support@veriton.app">Support</a>
