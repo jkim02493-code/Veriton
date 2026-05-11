@@ -19,7 +19,13 @@ def evidence(request: EvidenceRequest, settings: Settings = Depends(get_settings
     if settings.mock_mode:
         logger.info("query text received by backend: %r", request.text)
     try:
-        result = retrieve_evidence(request.text, settings, request.recencyPreference, request.demoMode)
+        result = retrieve_evidence(
+            request.text,
+            settings,
+            request.recencyPreference,
+            request.demoMode,
+            request.searchLanguage,
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

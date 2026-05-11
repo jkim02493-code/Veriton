@@ -1,9 +1,8 @@
 import type { EvidenceResponse, HealthResponse } from "../../../shared/types";
 import type { BackendEvidenceMessage, BackendHealthMessage, ExtractTopicsMessage, FetchDocumentTextMessage, ScanDocumentRequestedMessage } from "../types/messages";
-import "../utils/queryTranslator";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
-const REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 30000;
 
 interface BackendFetchResult<T> {
   payload: T;
@@ -152,7 +151,7 @@ chrome.runtime.onMessage.addListener((message: BackendHealthMessage | BackendEvi
   if (message.type === "BACKEND_EVIDENCE") {
     devLog("request received", message.type);
     devLog("selectedText sent to backend", message.request.text);
-    const requestBody = JSON.stringify(message.request);
+    const requestBody = JSON.stringify({ searchLanguage: "en", ...message.request });
     fetchWithTimeout<EvidenceResponse>("/evidence", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -187,9 +186,7 @@ chrome.runtime.onMessage.addListener((message: BackendHealthMessage | BackendEvi
       body: requestBody,
     })
       .then((result) => {
-        const originalTopics = result.payload.topics;
-        const translatedTopics = translateQueriesToEnglish(originalTopics, detectedLanguage);
-        sendResponse({ topics: translatedTopics, originalTopics, detectedLanguage });
+        sendResponse({ topics: result.payload.topics });
       })
       .catch((error: unknown) => sendResponse({ error: error instanceof Error ? error.message : String(error) }));
     return true;

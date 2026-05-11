@@ -23,6 +23,7 @@ def normalize_provider_card(card: ProviderEvidence) -> EvidenceCard:
         authors=card.authors,
         year=card.year,
         ageBucket=recency_label(card.year, card.title, card.snippet),
+        language=card.language,
         sourceType=card.sourceType,
         sourceTier=card.sourceTier,
         url=card.url,

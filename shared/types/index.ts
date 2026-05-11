@@ -12,6 +12,7 @@ export interface CitationMetadata {
   publisher?: string;
   url?: string;
   doi?: string;
+  language?: string;
   sourceType?: CitationSourceType;
 }
 
@@ -21,6 +22,7 @@ export interface EvidenceCard {
   authors: string[];
   year?: string;
   ageBucket?: AgeBucket;
+  language?: string;
   sourceType: string;
   sourceTier: SourceTier;
   url?: string;
@@ -33,6 +35,7 @@ export interface EvidenceCard {
 
 export interface EvidenceRequest {
   text: string;
+  searchLanguage?: "en" | "ja" | "es" | "zh" | "unknown";
   citationStyle: CitationStyle;
   recencyPreference?: RecencyPreference;
   demoMode?: boolean;

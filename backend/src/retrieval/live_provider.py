@@ -3,14 +3,16 @@ import logging
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as ProviderTimeoutError
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 
 from src.retrieval.base import ProviderEvidence
 from src.services.query_understanding import QueryFocus, is_clear_mismatch, is_foundational_source, passes_recency_guard, relevance_score, source_age_bucket, topical_match_strength
 
 logger = logging.getLogger(__name__)
+PROVIDER_TIMEOUT_SECONDS = 8.0
 
 
 @dataclass
@@ -27,31 +29,57 @@ class LiveAcademicRetrievalProvider:
         self.timeout_seconds = timeout_seconds
         self.last_attempts: list[ProviderAttempt] = []
         self.last_all_providers_failed = False
+        self._query_suffix = ""
+        self._search_language = "en"
 
-    def retrieve(self, focus: QueryFocus, recency_preference: str = "balanced") -> list[ProviderEvidence]:
+    def retrieve(self, focus: QueryFocus, recency_preference: str = "balanced", search_language: str = "en", query_suffix: str = "") -> list[ProviderEvidence]:
         self.last_attempts = []
         self.last_all_providers_failed = False
-        for provider_name, provider in (
-            ("OpenAlex", self._openalex),
-            ("Crossref", self._crossref),
-            ("Semantic Scholar", self._semantic_scholar),
-            ("arXiv", self._arxiv),
-        ):
-            endpoint = ""
-            try:
-                endpoint, cards = provider(focus)
-            except Exception as exc:
-                self._log_provider_failure(provider_name, endpoint or "not built", exc)
-                self.last_attempts.append(ProviderAttempt(name=provider_name, endpoint=endpoint or "not built", failed=True))
-                continue
+        previous_query_suffix = self._query_suffix
+        previous_search_language = self._search_language
+        self._query_suffix = query_suffix
+        self._search_language = search_language
+        try:
+            for provider_name, provider in (
+                ("OpenAlex", self._openalex),
+                ("Crossref", self._crossref),
+                ("Semantic Scholar", self._semantic_scholar),
+                ("arXiv", self._arxiv),
+            ):
+                endpoint = ""
+                try:
+                    endpoint, cards = self._call_provider_with_timeout(provider, focus)
+                except ProviderTimeoutError as exc:
+                    endpoint = f"{provider_name} timed out after {PROVIDER_TIMEOUT_SECONDS:.0f}s"
+                    self._log_provider_failure(provider_name, endpoint, exc)
+                    self.last_attempts.append(ProviderAttempt(name=provider_name, endpoint=endpoint, failed=True))
+                    continue
+                except Exception as exc:
+                    self._log_provider_failure(provider_name, endpoint or "not built", exc)
+                    self.last_attempts.append(ProviderAttempt(name=provider_name, endpoint=endpoint or "not built", failed=True))
+                    continue
 
-            relevant = self._rank_and_filter(focus, cards, recency_preference)
-            self.last_attempts.append(ProviderAttempt(name=provider_name, endpoint=endpoint, raw_count=len(cards), relevant_count=len(relevant)))
-            if relevant:
-                return relevant
+                relevant = self._rank_and_filter(focus, cards, recency_preference)
+                self.last_attempts.append(ProviderAttempt(name=provider_name, endpoint=endpoint, raw_count=len(cards), relevant_count=len(relevant)))
+                if relevant:
+                    return relevant
 
-        self.last_all_providers_failed = all(attempt.failed or attempt.raw_count == 0 for attempt in self.last_attempts)
-        return []
+            self.last_all_providers_failed = all(attempt.failed or attempt.raw_count == 0 for attempt in self.last_attempts)
+            return []
+        finally:
+            self._query_suffix = previous_query_suffix
+            self._search_language = previous_search_language
+
+    def _call_provider_with_timeout(self, provider: Callable[[QueryFocus], tuple[str, list[ProviderEvidence]]], focus: QueryFocus) -> tuple[str, list[ProviderEvidence]]:
+        executor = ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(provider, focus)
+        try:
+            return future.result(timeout=PROVIDER_TIMEOUT_SECONDS)
+        except ProviderTimeoutError:
+            future.cancel()
+            raise
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
     def _get_json(self, url: str) -> dict[str, Any]:
         request = urllib.request.Request(url, headers={"User-Agent": "academic-citation-copilot/0.1 (mailto:demo@example.com)"})
@@ -63,8 +91,14 @@ class LiveAcademicRetrievalProvider:
         with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
             return response.read().decode("utf-8")
 
+    def _provider_search_query(self, focus: QueryFocus) -> str:
+        return f"{focus.search_query} {self._query_suffix}".strip()
+
     def _openalex(self, focus: QueryFocus) -> tuple[str, list[ProviderEvidence]]:
-        query = urllib.parse.urlencode({"search": focus.search_query, "per-page": "8"})
+        params = {"search": self._provider_search_query(focus), "per-page": "8"}
+        if self._search_language in {"ja", "es", "zh"}:
+            params["filter"] = f"language:{self._search_language}"
+        query = urllib.parse.urlencode(params)
         endpoint = f"https://api.openalex.org/works?{query}"
         data = self._get_json(endpoint)
         cards: list[ProviderEvidence] = []
@@ -87,6 +121,7 @@ class LiveAcademicRetrievalProvider:
                     sourceTier="high",
                     url=item.get("doi") or item.get("id"),
                     doi=item.get("doi"),
+                    language=item.get("language"),
                     snippet=snippet,
                     relevanceExplanation=_why_relevant(focus, title, snippet),
                 )
@@ -94,7 +129,7 @@ class LiveAcademicRetrievalProvider:
         return endpoint, cards
 
     def _crossref(self, focus: QueryFocus) -> tuple[str, list[ProviderEvidence]]:
-        query = urllib.parse.urlencode({"query.bibliographic": focus.search_query, "rows": "8"})
+        query = urllib.parse.urlencode({"query.bibliographic": self._provider_search_query(focus), "rows": "8"})
         endpoint = f"https://api.crossref.org/works?{query}"
         data = self._get_json(endpoint)
         cards: list[ProviderEvidence] = []
@@ -119,6 +154,7 @@ class LiveAcademicRetrievalProvider:
                     sourceTier="high" if item.get("type") == "journal-article" else "medium",
                     url=item.get("URL"),
                     doi=f"https://doi.org/{doi}" if doi else None,
+                    language=item.get("language"),
                     snippet=_strip_html(snippet),
                     relevanceExplanation=_why_relevant(focus, title, snippet),
                 )
@@ -126,7 +162,7 @@ class LiveAcademicRetrievalProvider:
         return endpoint, cards
 
     def _semantic_scholar(self, focus: QueryFocus) -> tuple[str, list[ProviderEvidence]]:
-        query = urllib.parse.urlencode({"query": focus.search_query, "limit": "8", "fields": "title,authors,year,venue,abstract,url,externalIds,publicationTypes"})
+        query = urllib.parse.urlencode({"query": self._provider_search_query(focus), "limit": "8", "fields": "title,authors,year,venue,abstract,url,externalIds,publicationTypes"})
         endpoint = f"https://api.semanticscholar.org/graph/v1/paper/search?{query}"
         data = self._get_json(endpoint)
         cards: list[ProviderEvidence] = []
@@ -154,7 +190,7 @@ class LiveAcademicRetrievalProvider:
         return endpoint, cards
 
     def _arxiv(self, focus: QueryFocus) -> tuple[str, list[ProviderEvidence]]:
-        query = urllib.parse.urlencode({"search_query": f"all:{focus.search_query}", "start": "0", "max_results": "8"})
+        query = urllib.parse.urlencode({"search_query": f"all:{self._provider_search_query(focus)}", "start": "0", "max_results": "8"})
         endpoint = f"https://export.arxiv.org/api/query?{query}"
         data = self._get_text(endpoint)
         root = ET.fromstring(data)

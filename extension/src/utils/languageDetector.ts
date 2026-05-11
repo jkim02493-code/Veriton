@@ -30,3 +30,8 @@ function detectLanguage(text: string): SupportedLanguage {
 
   return "en";
 }
+
+(globalThis as any).detectLanguage = detectLanguage;
+if (typeof window !== "undefined") {
+  (window as any).detectLanguage = detectLanguage;
+}

@@ -48,7 +48,5 @@ export interface ExtractTopicsMessage {
 
 export interface ExtractTopicsRuntimeResponse {
   topics?: string[];
-  originalTopics?: string[];
-  detectedLanguage?: string;
   error?: string;
 }

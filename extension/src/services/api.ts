@@ -47,33 +47,45 @@ function devLog(message: string, value?: unknown): void {
 
 function sendBackendMessage<T>(message: BackendHealthMessage | BackendEvidenceMessage): Promise<T> {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (response: BackendRuntimeResponse<T> | undefined) => {
-      if (chrome.runtime.lastError) {
-        const runtimeErrorMessage = chrome.runtime.lastError.message ?? "Chrome runtime messaging failed";
+    try {
+      chrome.runtime.sendMessage(message, (response: BackendRuntimeResponse<T> | undefined) => {
+        if (chrome.runtime.lastError) {
+          const runtimeErrorMessage = chrome.runtime.lastError.message ?? "Chrome runtime messaging failed";
+          emitApiDebug({
+            message: `API request failed: ${runtimeErrorMessage}`,
+            backendUrl: message.type === "BACKEND_EVIDENCE" ? `${API_BASE_URL}/evidence` : `${API_BASE_URL}/health`,
+            httpStatus: runtimeErrorMessage,
+            selectedTextPayload: message.type === "BACKEND_EVIDENCE" ? message.request.text : undefined,
+            requestBody: message.type === "BACKEND_EVIDENCE" ? JSON.stringify(message.request) : undefined,
+          });
+          reject(new BackendRequestError(runtimeErrorMessage, message.type === "BACKEND_EVIDENCE" ? `${API_BASE_URL}/evidence` : `${API_BASE_URL}/health`, runtimeErrorMessage, message.type === "BACKEND_EVIDENCE" ? JSON.stringify(message.request) : undefined));
+          return;
+        }
         emitApiDebug({
-          message: `API request failed: ${runtimeErrorMessage}`,
-          backendUrl: message.type === "BACKEND_EVIDENCE" ? `${API_BASE_URL}/evidence` : `${API_BASE_URL}/health`,
-          httpStatus: runtimeErrorMessage,
+          message: response?.status ?? "API request completed",
+          backendUrl: response?.backendUrl,
+          httpStatus: response?.httpStatus ?? response?.error,
           selectedTextPayload: message.type === "BACKEND_EVIDENCE" ? message.request.text : undefined,
-          requestBody: message.type === "BACKEND_EVIDENCE" ? JSON.stringify(message.request) : undefined,
+          requestBody: response?.requestBody,
+          responseBody: response?.responseBody,
         });
-        reject(new BackendRequestError(runtimeErrorMessage, message.type === "BACKEND_EVIDENCE" ? `${API_BASE_URL}/evidence` : `${API_BASE_URL}/health`, runtimeErrorMessage, message.type === "BACKEND_EVIDENCE" ? JSON.stringify(message.request) : undefined));
-        return;
-      }
-      emitApiDebug({
-        message: response?.status ?? "API request completed",
-        backendUrl: response?.backendUrl,
-        httpStatus: response?.httpStatus ?? response?.error,
-        selectedTextPayload: message.type === "BACKEND_EVIDENCE" ? message.request.text : undefined,
-        requestBody: response?.requestBody,
-        responseBody: response?.responseBody,
+        if (!response?.ok) {
+          reject(new BackendRequestError(response?.error ?? "Backend request failed", response?.backendUrl, response?.httpStatus ?? response?.error, response?.requestBody, response?.responseBody));
+          return;
+        }
+        resolve(response.payload as T);
       });
-      if (!response?.ok) {
-        reject(new BackendRequestError(response?.error ?? "Backend request failed", response?.backendUrl, response?.httpStatus ?? response?.error, response?.requestBody, response?.responseBody));
-        return;
-      }
-      resolve(response.payload as T);
-    });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      emitApiDebug({
+        message: `API request failed: ${errorMessage}`,
+        backendUrl: message.type === "BACKEND_EVIDENCE" ? `${API_BASE_URL}/evidence` : `${API_BASE_URL}/health`,
+        httpStatus: errorMessage,
+        selectedTextPayload: message.type === "BACKEND_EVIDENCE" ? message.request.text : undefined,
+        requestBody: message.type === "BACKEND_EVIDENCE" ? JSON.stringify(message.request) : undefined,
+      });
+      reject(new BackendRequestError(errorMessage, message.type === "BACKEND_EVIDENCE" ? `${API_BASE_URL}/evidence` : `${API_BASE_URL}/health`, errorMessage, message.type === "BACKEND_EVIDENCE" ? JSON.stringify(message.request) : undefined));
+    }
   });
 }
 

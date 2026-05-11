@@ -32,6 +32,7 @@ class CitationMetadata(BaseModel):
     publisher: str | None = None
     url: str | None = None
     doi: str | None = None
+    language: str | None = None
     sourceType: SourceType = "unknown"
 
 
@@ -41,6 +42,7 @@ class EvidenceCard(BaseModel):
     authors: list[str] = Field(default_factory=list)
     year: str | None = None
     ageBucket: AgeBucket | None = None
+    language: str | None = None
     sourceType: str
     sourceTier: SourceTier
     url: str | None = None
@@ -53,6 +55,7 @@ class EvidenceCard(BaseModel):
 
 class EvidenceRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=1500)
+    searchLanguage: str = "en"
     citationStyle: CitationStyle
     recencyPreference: RecencyPreference = "balanced"
     demoMode: bool = False
@@ -66,6 +69,12 @@ class EvidenceRequest(BaseModel):
         if any(pattern.search(normalized) for pattern in INVALID_SELECTION_PATTERNS):
             raise ValueError("Selected text appears to be a local path or shell command, not Google Docs prose.")
         return normalized
+
+    @field_validator("searchLanguage")
+    @classmethod
+    def normalize_search_language(cls, value: str) -> str:
+        normalized = (value or "en").strip().lower()
+        return normalized if normalized in {"en", "ja", "es", "zh"} else "en"
 
 
 class EvidenceResponse(BaseModel):

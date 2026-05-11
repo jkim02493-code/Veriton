@@ -22,7 +22,6 @@ export interface ScannedDocument {
   documentId: string;
   fullText: string;
   keyPhrases: string[];
-  originalKeyPhrases: string[];
   wordCount: number;
   detectedLanguage: string;
 }
@@ -59,7 +58,7 @@ function requestDocumentText(documentId: string): Promise<string> {
   });
 }
 
-async function extractAcademicTopics(text: string, detectedLanguage: string): Promise<Pick<ScannedDocument, "keyPhrases" | "originalKeyPhrases" | "detectedLanguage">> {
+async function extractAcademicTopics(text: string, detectedLanguage: string): Promise<Pick<ScannedDocument, "keyPhrases" | "detectedLanguage">> {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage({ type: "EXTRACT_TOPICS", text, detectedLanguage }, (response: ExtractTopicsRuntimeResponse | undefined) => {
       const runtimeError = chrome.runtime.lastError;
@@ -73,8 +72,7 @@ async function extractAcademicTopics(text: string, detectedLanguage: string): Pr
       }
       resolve({
         keyPhrases: response.topics,
-        originalKeyPhrases: response.originalTopics?.length ? response.originalTopics : response.topics,
-        detectedLanguage: response.detectedLanguage ?? detectedLanguage,
+        detectedLanguage,
       });
     });
   });
@@ -92,7 +90,7 @@ export async function scanDocument(): Promise<ScannedDocument> {
       throw new DocumentScanError("The Google Docs API returned an empty document.", "fetch");
     }
 
-    const detectedLanguage = detectLanguage(fullText);
+    const detectedLanguage = (window as any).detectLanguage(fullText);
     const topicResult = await extractAcademicTopics(fullText, detectedLanguage);
     const keyPhrases = topicResult.keyPhrases;
     if (keyPhrases.length === 0) {
@@ -103,7 +101,6 @@ export async function scanDocument(): Promise<ScannedDocument> {
       documentId,
       fullText,
       keyPhrases,
-      originalKeyPhrases: topicResult.originalKeyPhrases,
       wordCount: fullText.split(/\s+/).filter(Boolean).length,
       detectedLanguage: topicResult.detectedLanguage,
     };
