@@ -164,7 +164,7 @@ async function getValidSupabaseSession(): Promise<SupabaseSession> {
 
 function launchSupabaseLogin(): Promise<SupabaseSession> {
   requireSupabaseConfig();
-  const redirectUrl = chrome.identity.getRedirectURL("supabase");
+  const redirectUrl = "https://oibdgcdpjdeelkjlfpdneojhjkbklbch.chromiumapp.org/";
   const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
   return new Promise((resolve, reject) => {
     chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, async (callbackUrl) => {
