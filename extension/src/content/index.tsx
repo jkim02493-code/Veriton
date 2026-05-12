@@ -1,3 +1,6 @@
+(window as any).process = { env: { NODE_ENV: 'production' } };
+(globalThis as any).process = { env: { NODE_ENV: 'production' } };
+
 import "../utils/languageDetector";
 import React from "react";
 import { createRoot } from "react-dom/client";

@@ -47,6 +47,7 @@ export default defineConfig({
           },
       rollupOptions: {
         output: {
+          banner: isContentBuild ? "globalThis.process = globalThis.process || { env: { NODE_ENV: 'production' } }; var process = globalThis.process;" : undefined,
           format: isContentBuild ? "iife" : "es",
           inlineDynamicImports: true,
           entryFileNames: isContentBuild ? "assets/content.js" : "assets/background.js",
