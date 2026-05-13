@@ -7,3 +7,4 @@ backend/**/__pycache__/
 extension/node_modules/
 extension/dist/
 extension/.env
+.tmp/
