@@ -93,12 +93,16 @@ def search(request: SearchRequest, authorization: str | None = Header(default=No
     try:
         user = verify_supabase_jwt(authorization, settings)
         usage = enforce_and_increment_search_limit(user, settings)
-        already_seen = set(_normalize_url(url) for url in get_seen_source_urls(user, settings))
-        already_seen.update(_normalize_url(url) for url in request.seen_urls)
     except SupabaseConfigError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"message": str(exc)}) from exc
     except UsageLimitError as exc:
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail={"message": str(exc), "usage": exc.usage.model_dump()}) from exc
+
+    already_seen = set(_normalize_url(url) for url in request.seen_urls)
+    try:
+        already_seen.update(_normalize_url(url) for url in get_seen_source_urls(user, settings))
+    except Exception:
+        logger.exception("Failed to load seen sources; continuing with request-provided seen URLs.")
 
     try:
         result = retrieve_evidence(
@@ -117,8 +121,15 @@ def search(request: SearchRequest, authorization: str | None = Header(default=No
     fresh_cards = _fresh_cards(result.cards, already_seen)
     fresh_urls = [_source_url(card) for card in fresh_cards if _source_url(card)]
 
-    save_search_history(user, settings, request.query, fresh_cards)
-    save_seen_sources(user, settings, fresh_urls)
+    try:
+        save_search_history(user, settings, request.query, fresh_cards)
+    except Exception:
+        logger.exception("Failed to save search history; returning evidence results anyway.")
+
+    try:
+        save_seen_sources(user, settings, fresh_urls)
+    except Exception:
+        logger.exception("Failed to save seen sources; returning evidence results anyway.")
 
     warnings = []
     if result.live_unavailable:
