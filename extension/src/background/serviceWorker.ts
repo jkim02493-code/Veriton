@@ -1,3 +1,8 @@
+declare const globalThis: any;
+if (typeof globalThis.process === 'undefined') {
+  globalThis.process = { env: { NODE_ENV: 'production' } };
+}
+
 import type { CurrentUserResponse, EvidenceResponse, HealthResponse, SearchHistoryEntry, SearchResponse, StarredSource, SupabaseSession } from "../../../shared/types";
 import type {
   BackendEvidenceMessage,
@@ -85,7 +90,7 @@ function devLog(message: string, value?: unknown): void {
 
 function requireSupabaseConfig(): void {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error("Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for the extension build.");
+    throw new Error("Supabase is not configured for the extension build.");
   }
 }
 

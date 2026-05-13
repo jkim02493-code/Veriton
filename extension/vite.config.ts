@@ -10,25 +10,11 @@ export default defineConfig({
     plugins: [react()],
     define: {
       'process.env.NODE_ENV': '"production"',
+      'process.env.SUPABASE_URL': '"https://tgvrjlkksdzrtjmqmthw.supabase.co"',
+      'process.env.SUPABASE_ANON_KEY': '"sb_publishable_g47iQek89ST9UEmpIm0KMw_pOzZTJWr"',
+      'import.meta.env.VITE_SUPABASE_URL': '"https://tgvrjlkksdzrtjmqmthw.supabase.co"',
+      'import.meta.env.VITE_SUPABASE_ANON_KEY': '"sb_publishable_g47iQek89ST9UEmpIm0KMw_pOzZTJWr"',
       global: 'globalThis',
-      'process.env.SUPABASE_URL': JSON.stringify(
-        'https://tgvrjlkksdzrtjmqmthw.supabase.co'
-      ),
-      'process.env.SUPABASE_ANON_KEY': JSON.stringify(
-        'sb_publishable_g47iQek89ST9UEmpIm0KMw_pOzZTJWr'
-      ),
-      'process.env.VITE_SUPABASE_URL': JSON.stringify(
-        'https://tgvrjlkksdzrtjmqmthw.supabase.co'
-      ),
-      'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(
-        'sb_publishable_g47iQek89ST9UEmpIm0KMw_pOzZTJWr'
-      ),
-      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(
-        'https://tgvrjlkksdzrtjmqmthw.supabase.co'
-      ),
-      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(
-        'sb_publishable_g47iQek89ST9UEmpIm0KMw_pOzZTJWr'
-      ),
     },
     build: {
       outDir: "dist",
