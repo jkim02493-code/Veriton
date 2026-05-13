@@ -9,8 +9,8 @@ export default defineConfig({
     mode: 'production',
     plugins: [react()],
     define: {
-      'process.env.NODE_ENV': JSON.stringify('production'),
-      'process': JSON.stringify({ env: { NODE_ENV: 'production' } }),
+      'process.env.NODE_ENV': '"production"',
+      global: 'globalThis',
       'process.env.SUPABASE_URL': JSON.stringify(
         'https://tgvrjlkksdzrtjmqmthw.supabase.co'
       ),
@@ -35,7 +35,7 @@ export default defineConfig({
       emptyOutDir: isContentBuild,
       lib: isContentBuild
         ? {
-            entry: resolve(__dirname, "src/content/index.tsx"),
+            entry: resolve(__dirname, "src/content/entry.ts"),
             name: "AcademicCitationCopilotContent",
             formats: ["iife"],
             fileName: () => "assets/content.js",
