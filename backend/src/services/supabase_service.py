@@ -225,6 +225,13 @@ def save_seen_sources(user: AuthenticatedUser, settings: Settings, source_urls: 
         json=rows,
         timeout=10,
     )
+    if response.status_code == 400 and _supabase_error_code(response) == "42P10":
+        response = httpx.post(
+            _rest_url(settings, "seen_sources"),
+            headers=_auth_headers(settings, user.token),
+            json=rows,
+            timeout=10,
+        )
     _raise_for_supabase_error(response)
 
 
@@ -302,3 +309,14 @@ def _raise_for_supabase_error(response: httpx.Response) -> None:
     except ValueError:
         detail = response.text
     raise HTTPException(status_code=response.status_code, detail=detail)
+
+
+def _supabase_error_code(response: httpx.Response) -> str | None:
+    try:
+        detail = response.json()
+    except ValueError:
+        return None
+    if isinstance(detail, dict):
+        code = detail.get("code")
+        return str(code) if code else None
+    return None
