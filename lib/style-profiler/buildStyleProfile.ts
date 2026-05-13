@@ -3,6 +3,8 @@ import { calculateConfidence } from "./confidence";
 import { classifyDomain } from "./domainClassifier";
 import { buildLexicalStats } from "./lexicalStats";
 import { normalizeWritingSample, type NormalizedWritingSample } from "./normalizeText";
+import { buildPhraseFingerprint } from "./phraseFingerprint";
+import { computeProfileReliability } from "./profileReliability";
 import { buildPunctuationStats } from "./punctuationStats";
 import { buildSemanticVoiceStats } from "./semanticVoiceStats";
 import { buildSentenceStats, splitSentences, tokenizeWords } from "./sentenceStats";
@@ -43,8 +45,11 @@ export function buildStyleProfile(input: StyleProfileInput): StyleProfileResult 
   const warnings = unique([...normalizationWarnings, ...confidenceResult.warnings]);
   const confidence = confidenceResult.confidence;
   const createdAt = new Date().toISOString();
+  const combinedText = preparedSamples.map((sample) => sample.text).join("\n\n");
+  const domainCoverage = buildDomainCoverage(preparedSamples);
 
   const profile: StyleProfile = {
+    schemaVersion: "1.1.0",
     profileId: createProfileId(preparedSamples, createdAt),
     userId: input.userId,
     createdAt,
@@ -55,9 +60,27 @@ export function buildStyleProfile(input: StyleProfileInput): StyleProfileResult 
     detectedDomains,
     confidenceScore: confidence,
     warnings,
+    phraseFingerprint: buildPhraseFingerprint(combinedText),
+    profileReliability: {
+      schemaVersion: "1.1.0",
+      totalWords: globalProfile.wordCount,
+      sampleCount: preparedSamples.length,
+      domainCoverage,
+      weakestAreas: [],
+      recommendedMoreSamples: true,
+      confidenceByCategory: {
+        syntax: 0,
+        lexical: 0,
+        transitions: 0,
+        punctuation: 0,
+        semanticVoice: 0,
+        domain: 0,
+      },
+    },
     globalProfile,
     domainProfiles,
   };
+  profile.profileReliability = computeProfileReliability(profile, preparedSamples.length, globalProfile.wordCount, domainCoverage);
 
   return { profile, confidence, warnings };
 }
@@ -94,4 +117,12 @@ function createProfileId(samples: PreparedSample[], createdAt: string): string {
 
 function unique<T>(values: T[]): T[] {
   return Array.from(new Set(values));
+}
+
+function buildDomainCoverage(samples: PreparedSample[]): Record<string, number> {
+  const coverage: Record<string, number> = {};
+  for (const sample of samples) {
+    coverage[sample.domain] = (coverage[sample.domain] ?? 0) + tokenizeWords(sample.text).length;
+  }
+  return coverage;
 }

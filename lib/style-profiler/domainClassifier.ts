@@ -4,22 +4,30 @@ import { tokenizeWords } from "./sentenceStats";
 export const VALID_DOMAINS: WritingDomain[] = [
   "humanities",
   "scientific",
+  "science",
   "business",
   "literaryAnalysis",
+  "literature",
   "history",
+  "philosophy",
   "personalStatement",
   "generalAcademic",
+  "general",
   "unknown",
 ];
 
 export const DOMAIN_KEYWORDS: Record<Exclude<WritingDomain, "unknown">, string[]> = {
   humanities: ["culture", "identity", "ethics", "society", "philosophy", "meaning", "human", "moral", "social"],
   scientific: ["experiment", "data", "method", "result", "hypothesis", "biology", "chemical", "physics", "variable", "evidence"],
+  science: ["experiment", "data", "method", "result", "hypothesis", "biology", "chemical", "physics", "variable", "evidence"],
   business: ["market", "revenue", "strategy", "consumer", "investment", "finance", "management", "brand", "profit"],
   literaryAnalysis: ["novel", "poem", "character", "symbol", "theme", "narrator", "imagery", "metaphor", "literary"],
+  literature: ["novel", "poem", "character", "symbol", "theme", "narrator", "imagery", "metaphor", "literary"],
   history: ["war", "empire", "revolution", "government", "century", "regime", "historical", "colonial", "political"],
+  philosophy: ["ethics", "logic", "reason", "meaning", "moral", "existence", "knowledge", "argument", "concept"],
   personalStatement: ["i", "my", "me", "experience", "learned", "goal", "passion", "community", "challenge"],
   generalAcademic: ["argument", "evidence", "research", "analysis", "claim", "study", "concept", "issue", "context"],
+  general: ["argument", "evidence", "research", "analysis", "claim", "study", "concept", "issue", "context"],
 };
 
 export function normalizeDomain(domain?: string): WritingDomain | undefined {

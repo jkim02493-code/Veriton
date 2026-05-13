@@ -1,11 +1,18 @@
+import type { PhraseFingerprint } from "./phraseFingerprint";
+import type { ProfileReliability } from "./profileReliability";
+
 export type WritingDomain =
   | "humanities"
   | "scientific"
+  | "science"
   | "business"
   | "literaryAnalysis"
+  | "literature"
   | "history"
+  | "philosophy"
   | "personalStatement"
   | "generalAcademic"
+  | "general"
   | "unknown";
 
 export type ArgumentativeStance = "balanced" | "assertive" | "exploratory" | "analytical" | "descriptive";
@@ -33,6 +40,7 @@ export interface StyleProfileResult {
 }
 
 export interface StyleProfile {
+  schemaVersion: "1.1.0";
   profileId: string;
   userId?: string;
   createdAt: string;
@@ -43,6 +51,8 @@ export interface StyleProfile {
   detectedDomains: WritingDomain[];
   confidenceScore: number;
   warnings: string[];
+  phraseFingerprint: PhraseFingerprint;
+  profileReliability: ProfileReliability;
   globalProfile: StyleDomainProfile;
   domainProfiles: Partial<Record<WritingDomain, StyleDomainProfile>>;
 }
@@ -137,4 +147,53 @@ export interface SemanticVoiceProfile {
   explanationDepthEstimate: number;
   firstPersonUsageFrequency: number;
   rhetoricalQuestionFrequency: number;
+}
+
+export function migrateProfileSchema(raw: unknown): StyleProfile {
+  if (!raw || typeof raw !== "object") {
+    throw new Error("Invalid style profile.");
+  }
+
+  const profile = raw as Partial<StyleProfile> & {
+    schemaVersion?: string;
+    totalWordCount?: number;
+    sampleCount?: number;
+    detectedDomains?: string[];
+  };
+
+  if (profile.schemaVersion === "1.1.0" && profile.phraseFingerprint && profile.profileReliability) {
+    return profile as StyleProfile;
+  }
+
+  const totalWords = Number(profile.totalWordCount ?? 0);
+  const sampleCount = Number(profile.sampleCount ?? 0);
+  const domainCoverage = Object.fromEntries((profile.detectedDomains ?? []).map((domain) => [domain, 0]));
+
+  return {
+    ...(profile as StyleProfile),
+    schemaVersion: "1.1.0",
+    phraseFingerprint: profile.phraseFingerprint ?? {
+      commonBigrams: [],
+      commonTrigrams: [],
+      commonFourgrams: [],
+      repeatedAcademicPhrases: [],
+      repeatedSentenceFrames: [],
+    },
+    profileReliability: profile.profileReliability ?? {
+      schemaVersion: "1.1.0",
+      totalWords,
+      sampleCount,
+      domainCoverage,
+      weakestAreas: ["syntax", "lexical", "transitions", "punctuation", "semanticVoice", "domain"],
+      recommendedMoreSamples: true,
+      confidenceByCategory: {
+        syntax: 0,
+        lexical: 0,
+        transitions: 0,
+        punctuation: 0,
+        semanticVoice: 0,
+        domain: 0,
+      },
+    },
+  } as StyleProfile;
 }

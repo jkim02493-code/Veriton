@@ -14,6 +14,7 @@
   "include": [
     "lib/style-profiler/**/*.ts",
     "app/api/style-profile/build/route.ts",
-    "scripts/test-style-profiler.ts"
+    "scripts/test-style-profiler.ts",
+    "scripts/test-stage1.5.ts"
   ]
 }
