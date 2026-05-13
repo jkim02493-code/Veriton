@@ -12,6 +12,8 @@ from src.schemas.evidence import EvidenceCard, UsageState
 
 FREE_SEARCH_LIMIT = 10
 PRO_DAILY_SEARCH_LIMIT = 10
+DEFAULT_SUPABASE_URL = "https://tgvrjlkksdzrtjmqmthw.supabase.co"
+DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_g47iQek89ST9UEmpIm0KMw_pOzZTJWr"
 
 
 class SupabaseConfigError(RuntimeError):
@@ -43,9 +45,11 @@ class UserProfile:
 
 
 def require_supabase_config(settings: Settings) -> tuple[str, str]:
-    if not settings.supabase_url or not settings.supabase_anon_key:
-        raise SupabaseConfigError("SUPABASE_URL and SUPABASE_ANON_KEY must be configured.")
-    return settings.supabase_url.rstrip("/"), settings.supabase_anon_key
+    supabase_url = (settings.supabase_url or DEFAULT_SUPABASE_URL).strip().rstrip("/")
+    supabase_anon_key = (settings.supabase_anon_key or DEFAULT_SUPABASE_ANON_KEY).strip()
+    if not supabase_url or not supabase_anon_key:
+        raise SupabaseConfigError("Supabase is not configured.")
+    return supabase_url, supabase_anon_key
 
 
 def _auth_headers(settings: Settings, token: str, *, prefer: str | None = None) -> dict[str, str]:

@@ -22,8 +22,8 @@ import type {
 } from "../types/messages";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "https://veriton.onrender.com";
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? "").replace(/\/$/, "");
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
+const SUPABASE_URL = "https://tgvrjlkksdzrtjmqmthw.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_g47iQek89ST9UEmpIm0KMw_pOzZTJWr";
 const SESSION_STORAGE_KEY = "veriton-supabase-session";
 const REQUEST_TIMEOUT_MS = 30000;
 
@@ -191,7 +191,9 @@ function launchSupabaseLogin(): Promise<SupabaseSession> {
 
 async function fetchWithTimeout<T>(path: string, options: RequestInit = {}): Promise<BackendFetchResult<T>> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => {
+    controller.abort(new Error(`Backend request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds.`));
+  }, REQUEST_TIMEOUT_MS);
   const url = `${API_BASE_URL}${path}`;
   try {
     const response = await fetch(url, {
@@ -213,6 +215,11 @@ async function fetchWithTimeout<T>(path: string, options: RequestInit = {}): Pro
   } catch (error) {
     if (error instanceof BackendFetchError) {
       throw error;
+    }
+    if (controller.signal.aborted) {
+      const reason = controller.signal.reason;
+      const message = reason instanceof Error ? reason.message : `Backend request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds.`;
+      throw new BackendFetchError(message, url, null, null);
     }
     throw new BackendFetchError(error instanceof Error ? error.message : String(error), url, null, null);
   } finally {
