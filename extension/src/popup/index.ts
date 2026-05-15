@@ -1,3 +1,5 @@
+import { initPopup } from "./main";
+
 export type * from "./types";
 export { AppStateStore } from "./state";
 export { Router } from "./router";

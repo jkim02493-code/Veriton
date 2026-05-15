@@ -16,6 +16,7 @@
     "contextMenus",
     "identity",
     "scripting",
+    "sidePanel",
     "storage"
   ],
   "host_permissions": [
@@ -37,6 +38,9 @@
   "action": {
     "default_popup": "popup.html",
     "default_title": "Veriton"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
   },
   "content_scripts": [
     {
