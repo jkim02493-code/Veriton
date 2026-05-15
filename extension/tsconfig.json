@@ -1,21 +1,15 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": ["DOM", "DOM.Iterable", "ES2020"],
-    "allowJs": false,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
+    "module": "ES2020",
+    "moduleResolution": "bundler",
     "strict": true,
-    "forceConsistentCasingInFileNames": true,
-    "module": "ESNext",
-    "moduleResolution": "Node",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "react-jsx",
-    "types": ["chrome"]
+    "lib": ["ES2020", "DOM"],
+    "types": ["chrome"],
+    "paths": {
+      "@lib/*": ["../lib/*"]
+    },
+    "noEmit": true
   },
-  "include": ["src", "../shared/types"]
+  "include": ["src/**/*.ts", "*.ts"]
 }

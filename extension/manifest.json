@@ -1,15 +1,23 @@
 {
   "manifest_version": 3,
-  "name": "Academic Citation Copilot",
+  "name": "Veriton",
   "version": "0.1.0",
-  "description": "Find academic evidence and deterministic citations for selected Google Docs text.",
+  "description": "AI-powered academic research and writing assistant for Google Docs.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["activeTab", "clipboardRead", "clipboardWrite", "contextMenus", "identity", "storage"],
+  "permissions": [
+    "activeTab",
+    "clipboardRead",
+    "clipboardWrite",
+    "contextMenus",
+    "identity",
+    "scripting",
+    "storage"
+  ],
   "host_permissions": [
     "https://docs.google.com/*",
     "https://docs.googleapis.com/*",
@@ -23,14 +31,24 @@
     "scopes": ["https://www.googleapis.com/auth/documents.readonly"]
   },
   "background": {
-    "service_worker": "assets/background.js",
+    "service_worker": "background.js",
     "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Veriton"
   },
   "content_scripts": [
     {
       "matches": ["https://docs.google.com/document/*"],
-      "js": ["assets/content.js"],
+      "js": ["content.js"],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["*.js", "*.css", "*.html"],
+      "matches": ["https://docs.google.com/*"]
     }
   ]
 }
