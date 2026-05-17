@@ -167,25 +167,45 @@ async function getValidSupabaseSession(): Promise<SupabaseSession> {
   return session;
 }
 
-function launchSupabaseLogin(): Promise<SupabaseSession> {
+async function launchSupabaseLogin(): Promise<SupabaseSession> {
   requireSupabaseConfig();
-  const redirectUrl = "https://oibdgcdpjdeelkjlfpdneojhjkbklbch.chromiumapp.org/";
-  const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
+  const SUPABASE_URL = "https://tgvrjlkksdzrtjmqmthw.supabase.co";
+  const redirectUrl = chrome.identity.getRedirectURL();
+
+  const params = new URLSearchParams({
+    provider: "google",
+    redirect_to: redirectUrl,
+  });
+
+  const authUrl = `${SUPABASE_URL}/auth/v1/authorize?${params.toString()}`;
+
+  console.log("[ACC background] chrome.identity.getRedirectURL()", redirectUrl);
+  console.log("[ACC background] Supabase authUrl", authUrl);
+
   return new Promise((resolve, reject) => {
-    chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, async (callbackUrl) => {
-      const runtimeError = chrome.runtime.lastError;
-      if (runtimeError || !callbackUrl) {
-        reject(new Error(runtimeError?.message ?? "Supabase login was cancelled."));
-        return;
+    chrome.identity.launchWebAuthFlow(
+      {
+        url: authUrl,
+        interactive: true,
+      },
+      async (responseUrl) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        if (!responseUrl) {
+          reject(new Error("No response URL returned"));
+          return;
+        }
+        try {
+          const session = parseSupabaseSession(responseUrl);
+          await setStoredSession(session);
+          resolve(session);
+        } catch (error) {
+          reject(error);
+        }
       }
-      try {
-        const session = parseSupabaseSession(callbackUrl);
-        await setStoredSession(session);
-        resolve(session);
-      } catch (error) {
-        reject(error);
-      }
-    });
+    );
   });
 }
 
