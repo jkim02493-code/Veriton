@@ -28,8 +28,8 @@
     "https://*.supabase.co/*"
   ],
   "oauth2": {
-    "client_id": "791076560067-j2nllerjfn5imf0qv04fq591lab558t2.apps.googleusercontent.com",
-    "scopes": ["https://www.googleapis.com/auth/documents.readonly"]
+    "client_id": "791076560067-b64pou0ievvgkset5682fc7o7is8072j.apps.googleusercontent.com",
+    "scopes": ["openid", "email", "profile"]
   },
   "background": {
     "service_worker": "background.js",
